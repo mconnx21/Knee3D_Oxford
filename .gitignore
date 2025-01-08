@@ -169,3 +169,11 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+
+#Folders particular to this project containing large data files
+/oai
+/data
+/masks
+/MLSegments
+/angleViewer_slices
