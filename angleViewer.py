@@ -226,21 +226,4 @@ for k in range (0, len(slices)):
 
     cv2.imwrite(str(k) + ".png", slices[k])
     displayASlice(slices[k])
-
 """
-#Testing if I can add a comment
-#Testing branches to see how this works
-
-
-
-#print(camToGlobal(math.pi/4, [0,10,5], [5,5]))
-
-#print(len(generateCirclePixelsByDepth([30,30], 30)))
-
-
-
-#DCMArrays, sliceThicknessSaggital, distanceBetweenZSaggital, distanceBetweenYSaggital, depth, height, width= loadDicom(patient3)
-#print(sliceThicknessSaggital)
-#print(distanceBetweenYSaggital)
-#print(distanceBetweenZSaggital)
-

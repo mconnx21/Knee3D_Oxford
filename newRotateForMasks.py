@@ -2,7 +2,6 @@ from readMLMasks import loadPatientMask
 from angleViewer import *
 import cv2
 from matplotlib import pyplot as plt
-from generateRotationTrainingData import padToSquareIncSliceThickness
 import math
 
 """PURPOSE OF THIS SCRIPT:
@@ -108,10 +107,12 @@ def generateTrueCoronalTrainingData(patients, patientAngles, filename):
 #patients = ["9911221", "9911721", "9912946", "9917307", "9918802", "9921811", "9924274", "9937239", "9938236", "9943227"]
 #patientAngles = [350, 356, 351]
 #patients = ["9947240", "9958234", "9964731"]
-"""patientAngles = [0, 0]
-patients = ["9947240", "9958234"]
-generateTrueCoronalTrainingData(patients, patientAngles, "genuineUnseenOffsets.npy")
-"""
+#patientAngles = [0, 0]
+#patients = ["9947240", "9958234"]
+#patients = ["9911221"]
+#patientAngles = [350]
+#generateTrueCoronalTrainingData(patients, patientAngles, "genuineUnseenOffsets.npy")
+
 
 
         

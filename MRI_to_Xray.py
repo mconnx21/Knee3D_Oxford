@@ -52,6 +52,11 @@ patientAngles = [350, 353, 349, 353, 352, 358, 352, 350, 359, 357]
 patientAnglesUnseen = [350, 356, 351] #third patient here is  particularly bad example
 """
 
-#tester = np.load("data/genuineUnseenOffsets.npy")
-#testerMask = tester[0:300]
-#pseudo_xray = MRI_to_Xray(testerMask)
+
+"""
+tester = np.load("..\\data\\genuineUnseenOffsets.npy")
+testerMask = tester[0:300]
+pseudo_xray = MRI_to_Xray(testerMask)
+plt.imshow(pseudo_xray, cmap ='gray')
+plt.show()
+"""
