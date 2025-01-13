@@ -2,9 +2,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import SimpleITK as sitk
-from readMLMasks import loadPatientMask
-from generateRotationTrainingData import padToSquareIncSliceThickness, binarize
-from newRotateForMasks import rotate_incircle, prepVolumeWithCircumCircleNew
+import os
+from pathlib import Path
 
 """PURPOSE OF THIS SCRIPT:
 Implement functions which takes one of the ML masks and allows you to project in any of saggital, coronal, or axial views
@@ -52,11 +51,12 @@ patientAngles = [350, 353, 349, 353, 352, 358, 352, 350, 359, 357]
 patientAnglesUnseen = [350, 356, 351] #third patient here is  particularly bad example
 """
 
-
 """
-tester = np.load("..\\data\\genuineUnseenOffsets.npy")
+dataFile = "genuineUnseenOffsets.npy"
+path = Path("data\\"+dataFile)  #save directory it will be better to later extend this to make subfolders based on angles
+tester = np.load(path)
 testerMask = tester[0:300]
-pseudo_xray = MRI_to_Xray(testerMask)
+pseudo_xray = MRI_to_Xray(testerMask, view = "axial")
 plt.imshow(pseudo_xray, cmap ='gray')
 plt.show()
 """

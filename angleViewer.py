@@ -10,8 +10,7 @@ Example usage is commented at the bottom."""
 """volume[d][h][w] is a pixel such that it's top left corner has coordinates (d, h, w) when working with geometry"""
 import math
 from cohenSutherland import cohenSutherland
-from midpoint import linePixels2D
-from sliceBetweenPoints import loadDicom, fillGaps, displayASlice
+from utilities import loadDicom, fillGaps, displayASlice
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
@@ -200,30 +199,36 @@ patient1 = "oai\\Package_1216539_samples\\1.C.2\\9911221\\20050909\\10583703"
 patient2 = "oai\\Package_1216539_samples\\1.C.2\\9911721\\20050812\\10478403"
 patient3 = "oai\\Package_1216539_samples\\1.C.2\\9947240\\20051013\\10200003"
 
-
 patient = patient3
-patientID = patient[34: len(patient)]
+patientID = patient[34: len(patient)]  #relies on the same directory structure as shown for the patients above
+
 #print(patientID)
-"""
-DCMArrays, sliceThicknessSaggital, distanceBetweenZSaggital, distanceBetweenYSaggital, depth, height, width= loadDicom(patient)
-filledVolume = fillGaps(DCMArrays, int(round( sliceThicknessSaggital/distanceBetweenZSaggital,0)))
-fvDepth, fvHeight, fvWidth = filledVolume.shape
-circumcirleRadius = findCircumcircle(filledVolume)
-#now going to padd this to a radius x fvHeight x radius volume, which contains the circumcylinder and is padded black around the filledVolume
-#padVolume expects a volume which has even dpeth and width - need to come back here and write a function to pad the filledVolume to even if not
-paddedvolume = padVolume(filledVolume, circumcirleRadius)
-print(paddedvolume.shape)
-theta  = -math.pi/2+math.pi/16  #note -math.pi/2 + math.pi/16 is perfect elligned coronal for patient 3. -math.pi/2 is coronal which matches radiant viewe
-pdepth = paddedvolume.shape[0]
-#theta = math.pi/4
-#slices = generateSlices(theta, paddedvolume, int(pdepth/4) , 3*int(pdepth/4), 25)
-slices = generateSlices(theta, paddedvolume, 200, 300, 10)
-path = Path("angleViewer_slices\\"+patientID)  #it will be better to later extend this to make subfolders based on angles
-path.mkdir(parents= True, exist_ok = True)
-os.chdir(path)
 
-for k in range (0, len(slices)):
+#INPUT: e.g. pi/2 radians, patient3, 1/3, 2/3, 50   to see patient 3's scan from an angle of pi/2, observing every 50th slice, ignoring the first and last third of slices.
+#OUTPUT: displays images of the desired slices. If save= True then the images will be save din the angleViewer_slices directory.
+def viewFromAngle(angle, patient, lowerFraction, upperFraction, step, save= False):
+    
+    DCMArrays, sliceThicknessSaggital, distanceBetweenZSaggital, distanceBetweenYSaggital, depth, height, width= loadDicom(patient)
+    filledVolume = fillGaps(DCMArrays, int(round( sliceThicknessSaggital/distanceBetweenZSaggital,0)))
+    #fvDepth, fvHeight, fvWidth = filledVolume.shape
+    circumcirleRadius = findCircumcircle(filledVolume)
+    #now going to padd this to a radius x fvHeight x radius volume, which contains the circumcylinder and is padded black around the filledVolume
+    #padVolume expects a volume which has even dpeth and width - need to come back here and write a function to pad the filledVolume to even if not
+    paddedvolume = padVolume(filledVolume, circumcirleRadius)
+    #print(paddedvolume.shape)
+    theta  = angle  #note -math.pi/2 + math.pi/16 is perfect elligned coronal for patient 3. -math.pi/2 is coronal which matches radiant viewe
+    numberSlices = paddedvolume.shape[0]
+    slices = generateSlices(theta, paddedvolume, int(lowerFraction*numberSlices), int(upperFraction*numberSlices), step)
+    currentDir = os.curdir
+    path = Path("angleViewer_slices\\"+patientID)  #save directory it will be better to later extend this to make subfolders based on angles
+    path.mkdir(parents= True, exist_ok = True)
+    os.chdir(path)
 
-    cv2.imwrite(str(k) + ".png", slices[k])
-    displayASlice(slices[k])
-"""
+    for k in range (0, len(slices)):
+        if save:
+            cv2.imwrite(str(k) + ".png", slices[k])
+        displayASlice(slices[k])
+    os.chdir(currentDir)
+
+#viewFromAngle(math.pi/14, patient, 1/3, 2/3, 50)
+    

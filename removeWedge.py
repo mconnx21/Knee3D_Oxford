@@ -1,6 +1,6 @@
 import numpy as np
 from skimage import measure
-from mhdMasks import write_ply_withNormals, pad
+from utilities import write_ply_withNormals, pad
 from matplotlib import pyplot as plt
 import sys
 import cv2
