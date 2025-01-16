@@ -3,10 +3,13 @@ from angleViewer import *
 import cv2
 from matplotlib import pyplot as plt
 import math
+from MRI_to_Xray import MRI_to_Xray
 
 """PURPOSE OF THIS SCRIPT:
 #1. Define a better rotation function for mask images, which rotates incircle so that the ML algorithm cannot simply learn to track the image corners
 #2. Use this to generate training data volumes which are all aligned to true coronal 
+#This is specifically designed for the ML masks given  here: 
+# And is not transferrable 
 """
 
 sliceIncreaseCoefficient = 2
@@ -15,9 +18,38 @@ sliceIncreaseCoefficient = 2
 #image should be cropped to square first, then circumcircled, then blacked.
 
 def prepVolumeWithCircumCircleNew(mask):
-    mask = mask[50:350] #crop
 
-    #each base image we will make 300 x 300
+    mask = mask[50:350] #take 300 axial slices for each mask
+    """
+    #Alternative option was 256 x256 squares, however the knee data won't all fit within the incircle of such a size. It is a pretty tight cropping of the knees though
+
+    #each slice image we will make y x z = 256 x 256
+    #For y axis we simply crop 20:276
+    #For z axis , we first need to add 2 copies of each pixel going down z axis to make proportional (filling in slice thickness)
+    #Then we will shave off 22 pixels from each
+    #Equivilently, we can shave the first and last 11 pixels off, and then double every pixel
+
+    
+    newHeight, newWidth = (256,256)
+    newVolume =  np.ndarray((300, newHeight, newWidth))
+    for k in range (0,300):
+        image = mask[k]
+        image = np.where(image[0:300] !=0,1,0)  #binarize the image to not distinguish between different types of knee tissue
+        newImage = np.ndarray((newHeight, newWidth))
+        for y in range (0, 256):
+            row = image[y+20]  # we will take rows form the original slice in [20:276]
+            row = row[11: (len(row)-11)] #shave off 11 z-pixels eeither side to make row length 128
+            for z in range (0,128):   #now essentially double each z to make row length 256
+                newImage[y][2*z] = row[z]
+                newImage[y][(2*z +1)] = row[z]
+        newVolume[k] = newImage
+    return newVolume
+    """
+    
+    
+    #OPTION 2: origional approach which produces 424x424 slices
+    #we make a circumcircle around where the knee data is in the image, and padd the image to fit the circumcircle as an incircle
+    
     circumcircleRadius = int(math.sqrt(150**2 + 150**2))
     newHeight, newWidth = (circumcircleRadius *2,circumcircleRadius *2)
     newVolume =  np.ndarray((300, newHeight, newWidth))
@@ -33,7 +65,7 @@ def prepVolumeWithCircumCircleNew(mask):
     #add the black background around the circumcircle
     for k in range (0,300):
         image = mask[k]
-        image = np.where(image[0:300] !=0,1,0)
+        image = np.where(image[0:300] !=0,1,0)   #could change the range here if we wanted to crop around the knee data more tightly 
         newImage = np.ndarray((newHeight, newWidth))
         for y in range (0, topLeft[0]):
             newImage[y] = rowOfZeros
@@ -49,6 +81,45 @@ def prepVolumeWithCircumCircleNew(mask):
             newImage[y] = rowOfZeros
         newVolume[k] = newImage
     return newVolume
+    
+
+    """
+    #OPTION 3: same as above, however it uses a tighter cropping around the knee data, such that the slices are ultimately 362 x362 rather than 424 x424
+    #we make a circumcircle around where the knee data is in the image, and padd the image to fit the circumcircle as an incircle
+    
+    circumcircleRadius = int(math.sqrt(128**2 + 128**2))
+    newHeight, newWidth = (circumcircleRadius *2,circumcircleRadius *2)
+    newVolume =  np.ndarray((300, newHeight, newWidth))
+
+    topLeft = (circumcircleRadius - 128, circumcircleRadius - 128)
+    topRight = (circumcircleRadius - 128, circumcircleRadius + 128)
+    bottomLeft = (circumcircleRadius + 128, circumcircleRadius - 128)
+    bottomRight = (circumcircleRadius + 128, circumcircleRadius + 128)
+
+    rowOfZeros = np.array([0 for i in range (0, newWidth)])
+
+    
+    #add the black background around the circumcircle
+    for k in range (0,300):
+        image = mask[k]
+        image = np.where(image[20:276] !=0,1,0)  
+        newImage = np.ndarray((newHeight, newWidth))
+        for y in range (0, topLeft[0]):
+            newImage[y] = rowOfZeros
+        for y in range (topLeft[0], bottomLeft[0]):
+            for x in range (0, topLeft[1]):
+                newImage[y][x] = 0
+            for x in range (topLeft[1], topRight[1]):
+                row = image[y-topLeft[0]][11: 139] #this is the row which, once douled, we want to sit within topleft[1] and topright[1]
+                i , j= divmod((x- topLeft[1]),2)
+                newImage[y][x] = row[i]
+            for x in range (topRight[1], newWidth):
+                newImage[y][x] = 0
+        for y in range (bottomLeft[0], newHeight):
+            newImage[y] = rowOfZeros
+        newVolume[k] = newImage
+    return newVolume
+    """
 
 
 
@@ -87,7 +158,7 @@ def rotate_incircle(image, angle):
     return result
 
 #assume patients[i] is patientAngles[i] away from true coronal, so we need to rotate by this angle to generate a true coronal volume
-def generateTrueCoronalTrainingData(patients, patientAngles, filename):
+def generateTrueCoronalTrainingData(patients, patientAngles, filename, save = True):
     allImages= np.ndarray((len(patients)*300, 424,424))
     for i in range(0,len(patients)):
         patient = patients[i]
@@ -95,11 +166,12 @@ def generateTrueCoronalTrainingData(patients, patientAngles, filename):
         paddedMask = prepVolumeWithCircumCircleNew(mask)
         for j in range (0, 300):
             allImages[300*i + j] = rotate_incircle(paddedMask[j], patientAngles[i])
-    
-    currDir = os.curdir
-    os.chdir("data")
-    np.save(filename, allImages)
-    os.chdir(currDir)
+    if save:
+        currDir = os.curdir
+        os.chdir("data")
+        np.save(filename, allImages)
+        os.chdir(currDir)
+    return allImages
 
 
 
@@ -117,6 +189,18 @@ def generateTrueCoronalTrainingData(patients, patientAngles, filename):
 #generateTrueCoronalTrainingData(patients, patientAngles, "genuineUnseenOffsets.npy")
 
 
+"""
+folder, mask = loadPatientMask("9000622", "LEFT", "1")
+croppedMask = prepVolumeWithCircumCircleNew(mask)
+print(croppedMask.shape)
+pseudo_xray = MRI_to_Xray(croppedMask, view = "coronal")
+plt.imshow(pseudo_xray, cmap ='gray')
+plt.show()
+#plt.imshow(croppedMask[95])
+#plt.show()
+#plt.imshow(rotate_incircle(croppedMask[95], 25), cmap ='gray')
+#plt.show()
+"""
 
         
 
