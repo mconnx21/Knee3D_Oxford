@@ -158,20 +158,32 @@ def rotate_incircle(image, angle):
     return result
 
 #assume patients[i] is patientAngles[i] away from true coronal, so we need to rotate by this angle to generate a true coronal volume
-def generateTrueCoronalTrainingData(patients, patientAngles, filename, save = True):
+def generateTrueCoronalTrainingData(patients, patientAngles, filename, save = True, side = "LEFT"):
     allImages= np.ndarray((len(patients)*300, 424,424))
     for i in range(0,len(patients)):
+        print(i)
         patient = patients[i]
-        _, mask = loadPatientMask(patient, "LEFT", "1")
+        _, mask = loadPatientMask(patient, side, "1")
         paddedMask = prepVolumeWithCircumCircleNew(mask)
         for j in range (0, 300):
             allImages[300*i + j] = rotate_incircle(paddedMask[j], patientAngles[i])
     if save:
         currDir = os.curdir
         os.chdir("data")
-        np.save(filename, allImages)
+        np.savez_compressed(filename, x=allImages)
         os.chdir(currDir)
     return allImages
+
+def rotate_volume(mask, angle, alreadyPadded = False):
+    if not alreadyPadded:
+        paddedMask = prepVolumeWithCircumCircleNew(mask)
+    else:
+        paddedMask = mask
+    newMask = np.ndarray(paddedMask.shape)
+    for j in range (0, paddedMask.shape[0]):
+        newMask[j] = rotate_incircle(paddedMask[j], angle)
+    return newMask
+
 
 
 
@@ -189,20 +201,53 @@ def generateTrueCoronalTrainingData(patients, patientAngles, filename, save = Tr
 #generateTrueCoronalTrainingData(patients, patientAngles, "genuineUnseenOffsets.npy")
 
 
-"""
-folder, mask = loadPatientMask("9000622", "LEFT", "1")
-croppedMask = prepVolumeWithCircumCircleNew(mask)
-print(croppedMask.shape)
-pseudo_xray = MRI_to_Xray(croppedMask, view = "coronal")
-plt.imshow(pseudo_xray, cmap ='gray')
-plt.show()
+
+#folder, mask = loadPatientMask("9911221", "RIGHT", "1")
+
+#croppedMask = prepVolumeWithCircumCircleNew(mask)
+#print(croppedMask.shape)
+#pseudo_xray = MRI_to_Xray(croppedMask, view = "coronal")
+#plt.imshow(pseudo_xray, cmap ='gray')
+#plt.show()
 #plt.imshow(croppedMask[95])
 #plt.show()
 #plt.imshow(rotate_incircle(croppedMask[95], 25), cmap ='gray')
 #plt.show()
+
+
+trainingAngles = [350, 353, 349, 353, 352, 358, 352, 350, 359, 357]
+trainingPatients = ["9911221", "9911721", "9912946", "9917307", "9918802", "9921811", "9924274", "9937239", "9938236", "9943227"]
+testingAngles = [350, 356, 351, 355, 356, 356, 346, 351, 352, 357]
+testingPatients = ["9947240", "9958234", "9964731", "9002116", "9000622","9002316", "9002411", "9002430", "9002817","9003126"]
+#9002411 is a BRILLIANT EXAMPLE
+
+"""
+i=9
+testerView = generateTrueCoronalTrainingData(testingPatients[i:i+1], [0], "tester.npy", save=False)
+pseudo_xray = MRI_to_Xray(testerView)
+plt.imshow(pseudo_xray, cmap ='gray')
+plt.show()
 """
 
-        
+
+#generateTrueCoronalTrainingData(testingPatients, [0,0,0,0,0,0,0,0,0,0], "unseen_originals.npy")
 
 
 
+rightlegTrainPatients = ["9911221", "9911721","9912946","9917307", "9918802"]
+rightLegTrainAngles = [15,8, 10,7,8]
+
+
+
+"""
+rotatedMask = generateTrueCoronalTrainingData(["9918802"],[8], "tester.npy",save = False, side = "RIGHT")
+pseudo_xray = MRI_to_Xray(rotatedMask)
+plt.imshow(pseudo_xray, cmap ='gray')
+plt.show()
+"""
+
+
+#generateTrueCoronalTrainingData(rightlegTrainPatients, rightLegTrainAngles, "right_corrected_5", side = "RIGHT")
+#generateTrueCoronalTrainingData(rightlegTrainPatients, [0,0,0,0,0], "right_originals_5", side = "RIGHT")
+#generateTrueCoronalTrainingData(trainingPatients, trainingAngles, "left_corrected_10")
+#generateTrueCoronalTrainingData(trainingPatients, [0,0,0,0,0,0,0,0,0,0], "left_original_10")
