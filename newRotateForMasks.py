@@ -3,7 +3,7 @@ from angleViewer import *
 import cv2
 from matplotlib import pyplot as plt
 import math
-from MRI_to_Xray import MRI_to_Xray
+#from MRI_to_Xray import MRI_to_Xray
 
 """PURPOSE OF THIS SCRIPT:
 #1. Define a better rotation function for mask images, which rotates incircle so that the ML algorithm cannot simply learn to track the image corners
@@ -158,12 +158,18 @@ def rotate_incircle(image, angle):
     return result
 
 #assume patients[i] is patientAngles[i] away from true coronal, so we need to rotate by this angle to generate a true coronal volume
-def generateTrueCoronalTrainingData(patients, patientAngles, filename, save = True, side = "LEFT"):
+def generateTrueCoronalTrainingData(patients, patientAngles, filename, save = True, side = "LEFT", without_cartilidge = False):
     allImages= np.ndarray((len(patients)*300, 424,424))
     for i in range(0,len(patients)):
         print(i)
         patient = patients[i]
         _, mask = loadPatientMask(patient, side, "1")
+        if without_cartilidge:
+            femoralBone = (cv2.threshold(mask, 1, 7, cv2.THRESH_TOZERO_INV))[1]  #1 in the array
+            tibialBone = cv2.threshold((cv2.threshold(mask,1,7,cv2.THRESH_TOZERO))[1], 2,7, cv2.THRESH_TOZERO_INV)[1] #2 in the array
+            patella = cv2.threshold((cv2.threshold(mask,2,7,cv2.THRESH_TOZERO))[1], 3,7, cv2.THRESH_TOZERO_INV)[1] #3 in the array
+            boneOnly = np.add(np.add(femoralBone, tibialBone), patella)
+            mask = boneOnly
         paddedMask = prepVolumeWithCircumCircleNew(mask)
         for j in range (0, 300):
             allImages[300*i + j] = rotate_incircle(paddedMask[j], patientAngles[i])
@@ -174,8 +180,14 @@ def generateTrueCoronalTrainingData(patients, patientAngles, filename, save = Tr
         os.chdir(currDir)
     return allImages
 
-def rotate_volume(mask, angle, alreadyPadded = False):
+def rotate_volume(mask, angle, alreadyPadded = False, without_cartilidge = False):
     if not alreadyPadded:
+        if without_cartilidge:
+            femoralBone = (cv2.threshold(mask, 1, 7, cv2.THRESH_TOZERO_INV))[1]  #1 in the array
+            tibialBone = cv2.threshold((cv2.threshold(mask,1,7,cv2.THRESH_TOZERO))[1], 2,7, cv2.THRESH_TOZERO_INV)[1] #2 in the array
+            patella = cv2.threshold((cv2.threshold(mask,2,7,cv2.THRESH_TOZERO))[1], 3,7, cv2.THRESH_TOZERO_INV)[1] #3 in the array
+            boneOnly = np.add(np.add(femoralBone, tibialBone), patella)
+            mask = boneOnly
         paddedMask = prepVolumeWithCircumCircleNew(mask)
     else:
         paddedMask = mask
@@ -251,3 +263,5 @@ plt.show()
 #generateTrueCoronalTrainingData(rightlegTrainPatients, [0,0,0,0,0], "right_originals_5", side = "RIGHT")
 #generateTrueCoronalTrainingData(trainingPatients, trainingAngles, "left_corrected_10")
 #generateTrueCoronalTrainingData(trainingPatients, [0,0,0,0,0,0,0,0,0,0], "left_original_10")
+
+#generateTrueCoronalTrainingData(["9911221"], [350], "9911221_nocart_corrected", save = True, side = "LEFT", without_cartilidge = True)

@@ -1,4 +1,5 @@
 from newRotateForMasks import *
+from MRI_to_Xray import MRI_to_Xray
 from matplotlib import pyplot as plt
 
 from readMLMasks import loadPatientMask
@@ -141,6 +142,6 @@ def coronal_axial_correspondance(patient, side, angle, axial_slice_num):
     ax[3].set_title("0°, New Rotation Function")
     plt.show()
 
-coronal_axial_correspondance("9911221", "LEFT", 350, 100)
+#coronal_axial_correspondance("9911221", "LEFT", 350, 100)
 
 
