@@ -180,6 +180,27 @@ def generateTrueCoronalTrainingData(patients, patientAngles, filename, save = Tr
         os.chdir(currDir)
     return allImages
 
+def prep_volume_efficient(mask):
+
+    #OPTION 2: origional approach which produces 424x424 slices
+    #we make a circumcircle around where the knee data is in the image, and padd the image to fit the circumcircle as an incircle
+
+    circumcircleRadius = int(math.sqrt(150**2 + 150**2))
+    newHeight, newWidth = (circumcircleRadius *2,circumcircleRadius *2)
+    newVolume =  np.ndarray((300, newHeight, newWidth))
+
+    paddingAmount = circumcircleRadius - 150
+
+    #add the black background around the circumcircle
+    for k in range (0,300):
+        image = mask[k]
+        image = np.where(image[0:300] !=0,1,0).astype(np.uint8)
+        #print(image.shape)
+        image = cv2.resize(image, (300, 300))
+        newImage = cv2.copyMakeBorder(image, paddingAmount, paddingAmount, paddingAmount, paddingAmount, cv2.BORDER_CONSTANT, None, value=0)
+        newVolume[k] = newImage
+    return newVolume
+
 def rotate_volume(mask, angle, alreadyPadded = False, without_cartilidge = False):
     if not alreadyPadded:
         if without_cartilidge:
@@ -188,7 +209,8 @@ def rotate_volume(mask, angle, alreadyPadded = False, without_cartilidge = False
             patella = cv2.threshold((cv2.threshold(mask,2,7,cv2.THRESH_TOZERO))[1], 3,7, cv2.THRESH_TOZERO_INV)[1] #3 in the array
             boneOnly = np.add(np.add(femoralBone, tibialBone), patella)
             mask = boneOnly
-        paddedMask = prepVolumeWithCircumCircleNew(mask)
+        #paddedMask = prepVolumeWithCircumCircleNew(mask)
+        paddedMask = prep_volume_efficient(mask)
     else:
         paddedMask = mask
     newMask = np.ndarray(paddedMask.shape)
