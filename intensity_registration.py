@@ -5,17 +5,15 @@ from matplotlib import pyplot as plt
 import cv2
 from readMLMasks import loadPatientMask
 
-
+"""
 def pre_process_xray(xray_image):
     xray_image = cv2.threshold(xray_image, 100, 255, cv2.THRESH_TOZERO)[1]  #was 114 for 9911221, 100 for 9947240
     brightest_mask = cv2.threshold(xray_image, 120, 255, cv2.THRESH_TOZERO)[1] #was 147 for 9911221
     xray_image = 0.7*xray_image + 0.3*brightest_mask
     xray_image = cv2.blur(xray_image, (4,4))
     xray_image = 5/6 * xray_image
-
-
     return xray_image
-"""
+
 def pre_process_xray_tibialvals(xray_image, xray_patella_mask, xray_patella_centre, tibial_coordinates, kernel_size):
     sample = xray_image[tibial_coordinates[1]-(kernel_size//2): tibial_coordinates[1]+(kernel_size//2), tibial_coordinates[0]-(kernel_size//2):tibial_coordinates[0]+(kernel_size//2)]
     #xray_image[tibial_coordinates[1]-(kernel_size//2): tibial_coordinates[1]+(kernel_size//2), tibial_coordinates[0]-(kernel_size//2):tibial_coordinates[0]+(kernel_size//2)] = 1000*sampl
@@ -47,31 +45,23 @@ def pre_process_xray_tibialvals(xray_image, xray_patella_mask, xray_patella_cent
 """
 
 def pre_process_xray_tibialvals(xray_image, xray_patella_mask, xray_patella_centre, tibial_coordinates, kernel_size):
-    
-    #xray_image[tibial_coordinates[1]-(kernel_size//2): tibial_coordinates[1]+(kernel_size//2), tibial_coordinates[0]-(kernel_size//2):tibial_coordinates[0]+(kernel_size//2)] = 1000*sampl
-    #xray_image = cv2.rectangle(xray_image, (tibial_coordinates[1]-(kernel_size//2), tibial_coordinates[0]-(kernel_size//2)), ( tibial_coordinates[1]+(kernel_size//2), tibial_coordinates[0]+(kernel_size//2)), 255)
-    #plt.imshow(xray_image, cmap = 'gray')
-    #plt.show()
 
     PXRAY_TIBIAL_VAL  = 80 # contant
 
     blurred = np.copy(xray_image)
     blurred = cv2.blur(blurred, (11,11))  #more blur for use in adaptive thresholding
     xray_image = cv2.blur(xray_image, (4,4))
-    
+
 
     thresholded_mask = cv2.adaptiveThreshold(blurred, 255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 0)
     
     #plt.imshow(thresholded_mask, cmap = 'gray')
     #plt.show()
 
-    
-    
     sample = xray_image[tibial_coordinates[1]-(kernel_size//2): tibial_coordinates[1]+(kernel_size//2), tibial_coordinates[0]-(kernel_size//2):tibial_coordinates[0]+(kernel_size//2)]
     min_val = np.min(sample)
     
-    #xray_image = cv2.threshold(xray_image, min_val, 255, cv2.THRESH_TOZERO)[1]
-    xray_image = xray_image + (15/255)*thresholded_mask
+    xray_image = xray_image + (12/255)*thresholded_mask
     
     
     #plt.imshow(xray_image, cmap ='gray')
@@ -86,20 +76,25 @@ def pre_process_xray_tibialvals(xray_image, xray_patella_mask, xray_patella_cent
     #plt.show()
     patella_sample = xray_image[xray_patella_centre[1]-(kernel_size//2): xray_patella_centre[1]+(kernel_size//2), xray_patella_centre[0]-(kernel_size//2):xray_patella_centre[0]+(kernel_size//2)]
     avg_patella_val = np.average(patella_sample)
-    #brightest_mask = cv2.threshold(xray_image, avg_patella_val, 255, cv2.THRESH_TOZERO)[1]
-    #brightest_mask = cv2.threshold(brightest_mask,0,1,cv2.THRESH_BINARY )[1]
 
-    PXRAY_PAT_AVG = 115
+
+    PXRAY_PAT_AVG = 125
     amount_brightness_to_add = PXRAY_PAT_AVG- avg_patella_val
     xray_image = xray_image + amount_brightness_to_add*brightest_mask
-    #xray_image = xray_image + PXRAY_PAT_AVG*brightest_mask
     
-    #plt.imshow(xray_image, cmap = 'gray')
+    #plt.imshow(xray_image, cmap = 'gray', vmin = 0, vmax = 255)
     #plt.show()
     
     return xray_image
 
 
+def pre_process_pxray(rotated_volume, patella_mask, chosen_tibial_value, chosen_patella_value, resize):
+    patella_mask = np.where(patella_mask>0, 1, 0) #just in case patella_mask is given as 255 or 0 rather than as 1 or 0 
+    base_pxray = cv2.resize(MRI_to_Xray(rotated_volume), (0,0), fx=resize, fy=resize)
+    binary_pxray = chosen_tibial_value*np.where(base_pxray >0,1, 0)
+    amount_to_add = chosen_patella_value - chosen_tibial_value
+    final_xray = binary_pxray + amount_to_add*patella_mask
+    return final_xray
 
 
 
@@ -114,11 +109,6 @@ def get_xray_patella(xray_patella_mask, contour_colour = "black"):
 
 
 def get_pxray_patella(just_patella):
-    #print("here")
-    
-    #just_patella = cv2.threshold(MRI_to_Xray(patella_volume), 0.01,255,0)[1]
-    
-    #just_patella = cv2.cvtColor(just_patella, cv2.COLOR_BGR2GRAY)
 
     contours, hierarchy = cv2.findContours(just_patella,  
     cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE) 
@@ -130,8 +120,7 @@ def get_pxray_patella(just_patella):
     cv2.drawContours(contour_mask, contours, -1, 255, 3) 
     #plt.imshow(contour_mask)
     #plt.show()
-    #print(contour_mask.shape)
-    #contour_mask = cv2.cvtColor(contour_mask, cv2.COLOR_RGB2GRAY)
+
     return contour_mask, contours
 
 
@@ -220,32 +209,13 @@ def crop_scaled_xray(scaled_xray, pxray_centre, xray_centre, pxray):
 
     pre_cropped_xray = cropped_xray #this is silly naming
     cropped_xray = cropped_xray[top_bound:bottom_bound, left_bound:right_bound]
-    overlay = 0.5*cropped_xray + 0.5*pxray
+    #overlay = 0.5*cropped_xray + 0.5*pxray
     #plt.imshow(overlay, cmap = 'gray')
     #plt.show()
-    """
-    cropped_xray = cropped_xray[top_bound:bottom_bound]
-    
-    #plt.imshow(cropped_xray)
-    #plt.show()
-    print(cropped_xray.shape)
-    cropped_xray = np.transpose(cropped_xray)
-    print(cropped_xray.shape)
-    cropped_xray = cropped_xray[left_bound:right_bound]
-    print(cropped_xray.shape)
-    cropped_xray = np.transpose(cropped_xray)
-    print(cropped_xray.shape)
-    #plt.imshow(cropped_xray)
-    #plt.show()
-    """
     #fg,ax = plt.subplots(1,2)
     #ax[0].imshow(cropped_xray, cmap = 'gray', vmin = 0, vmax = 255)
     #ax[1].imshow(pxray, cmap= 'gray', vmin = 0, vmax = 255)
     #plt.show()
-
-    
-
-    
 
     return cropped_xray, top_bound, bottom_bound, left_bound, right_bound, pre_cropped_xray #pre_cropped_xray is the newly scaled xray to take account for bound problems
 
@@ -301,8 +271,6 @@ def plot_entropies(volume, start, num_images, step, xray, scale, num_bins):
     
     return entropies
 
-def two_degrees_freedom(xray, xray_patella, volume, start, angle_step, x_step):
-    return False
 
 def rotational_freedom(volume, start, num_images, step, xray, xray_patella_mask, scalar, num_bins):
     patella_volume = cv2.threshold((cv2.threshold(volume,2,7,cv2.THRESH_TOZERO))[1], 3,7, cv2.THRESH_TOZERO_INV)[1] #3 in the array
@@ -362,9 +330,9 @@ def vertical_translational_freedom(xray, top_bound, left_bound, num_up, num_down
         #print(cropped_xray.shape)
 
         #overlay = 0.5*cropped_xray + 0.5*pxray
-        #plt.imshow(overlay, cmap ='gray')
+        #plt.imshow(overlay, cmap ='gray', vmin = 0, vmax= 255)
         #plt.show()
-        #difference = cropped_xray - pxray
+        difference = cropped_xray - pxray
         """
         fg, ax = plt.subplots(2,2)
         fg.suptitle("Height " + str(top))
@@ -458,9 +426,7 @@ def rot_scale_vert(volume, rot_start, rot_num_images, rot_step, xray, xray_patel
     #contoured_xray = cv2.drawContours(xray, xray_contours, -1, 255, 1)
     #plt.imshow(contoured_xray)
     #plt.show()
-    #xray_contour = xray_contours[2:3] #for 9911221 , need to fix
-    print(len(xray_contours))
-    #xray_contour = xray_contours[1:2] # for 9947240 need to fix
+
     angle_entropies = []
     angles = []
 
@@ -477,7 +443,10 @@ def rot_scale_vert(volume, rot_start, rot_num_images, rot_step, xray, xray_patel
         contour_mask, pxray_contours = get_pxray_patella(just_patella)
 
         rotated_volume = rotate_volume(volume, angle, without_cartilidge=True)
-        pxray = cv2.resize(255*1.3*MRI_to_Xray(rotated_volume) , (0,0), fx=resize, fy=resize) #THIS 1.3 is random and needs adjusting
+        
+        pxray = pre_process_pxray(rotated_volume, just_patella, 85, 115, resize)
+        #plt.imshow(pxray, cmap = 'gray', vmin = 0, vmax =255)
+        #plt.show()
 
         initial_scale, xray_rect, pxray_rect = get_inital_scale_factor(xray, xray_contours, pxray, pxray_contours)
         scale_factor = initial_scale
@@ -543,12 +512,14 @@ def rot_scale_vert(volume, rot_start, rot_num_images, rot_step, xray, xray_patel
 
 
 
-def registration_experiment(patient, side, rot_start, rot_num_images, rot_step,scalar, num_bins, num_up, num_down, trans_step, num_inflate, num_deflate, xray_patella_centre, tibial_coordinates, kernel_size, resize =0.5):
+def registration_experiment(patient, side, rot_start, rot_num_images, rot_step,scalar, num_bins, num_up, num_down, trans_step, num_inflate, num_deflate, xray_patella_centre, tibial_coordinates, kernel_size, angle, resize =0.5):
     _, volume = loadPatientMask(patient, side, "1")
     xray_patella_mask = cv2.imread("xrays\\"+patient+"_"+side.lower()+"_xray_contour.png", cv2.IMREAD_GRAYSCALE)
     original_xray = cv2.imread("xrays\\"+patient+"_"+side.lower()+"_xray.jpg", cv2.IMREAD_GRAYSCALE)
-    #xray_patella_centre = (xray_patella_centre[0]*resize, xray_patella_centre[1]*resize)
-    #tibial_coordinates = (tibial_coordinates[0]*resize, tibial_coordinates[1]*resize)
+    resized_first_xray = cv2.resize(original_xray, (0,0), fx=resize, fy =resize)  #to be saved to show base case 
+
+
+ 
     xray = pre_process_xray_tibialvals(original_xray, xray_patella_mask, xray_patella_centre, tibial_coordinates, kernel_size)
     xray = cv2.resize(xray, (0,0), fx=resize, fy =resize)
     xray_patella_mask =cv2.resize(xray_patella_mask, (0,0), fx=resize, fy =resize)
@@ -558,29 +529,45 @@ def registration_experiment(patient, side, rot_start, rot_num_images, rot_step,s
     print("Min entropy was ", min_entropy, " achieved at (angle, scale, height) ", angle_achieved_at, scale_achieved_at, height_achieved_at)
     np.savez_compressed("results\\"+patient+"_"+side+"_angleEntropies.npz", e= entropies, s = [min_entropy, angle_achieved_at, scale_achieved_at, height_achieved_at])
     
-    #xray = cv2.imread("xrays\\"+patient+"_"+side.lower()+"_xray.jpg", cv2.IMREAD_GRAYSCALE) #unprocessing the xray for sake of display
+   
     patella_volume = cv2.threshold((cv2.threshold(volume,2,7,cv2.THRESH_TOZERO))[1], 3,7, cv2.THRESH_TOZERO_INV)[1] #3 in the array
     xray_patella_mask, xray_contours = get_xray_patella(xray_patella_mask)
+    unrotated_just_patella =  cv2.resize(np.where(MRI_to_Xray(rotate_volume(patella_volume,0))>= 0.01,255,0).astype(np.uint8),(0,0), fx=resize, fy=resize)
+    unrotated_pxray = pre_process_pxray(rotate_volume(volume,0, without_cartilidge=True), unrotated_just_patella, 85, 115, resize)
+
+
     rotated_patella_volume = rotate_volume(patella_volume,angle_achieved_at)
     just_patella = cv2.resize(np.where(MRI_to_Xray(rotated_patella_volume)>= 0.01,255,0).astype(np.uint8),(0,0), fx=resize, fy=resize)
     contour_mask, pxray_contours = get_pxray_patella(just_patella)
 
     rotated_volume = rotate_volume(volume, angle_achieved_at, without_cartilidge=True)
     
-    pxray = cv2.resize(255*1.3*MRI_to_Xray(rotated_volume) , (0,0), fx=resize, fy=resize) #THIS 1.3 is random and needs adjusting
+    
+    pxray = pre_process_pxray(rotated_volume, just_patella, 85, 115, resize)
     initial_scale, xray_rect, pxray_rect = get_inital_scale_factor(xray, xray_contours, pxray, pxray_contours)
     scale_factor = scale_achieved_at
     scaled_xray, pxray_centre, xray_centre = scale(xray, scale_factor, xray_rect, pxray_rect)
+    scaled_unprocessed_xray, _, _ = scale(resized_first_xray, scale_factor, xray_rect, pxray_rect)
     cropped_xray ,top_bound, bottom_bound, left_bound, right_bound , scaled_xray= crop_scaled_xray(scaled_xray, pxray_centre, xray_centre, pxray)
+    cropped_unprocessed_xray, _, _,_,_, scaled_unprocessed_xray = crop_scaled_xray(scaled_unprocessed_xray, pxray_centre, xray_centre, pxray)
     top_bound = height_achieved_at
     cropped_xray = scaled_xray[top_bound:top_bound+pxray.shape[0], left_bound: right_bound]
-    overlay = 0.6*cropped_xray + 0.4*pxray
+    cropped_unprocessed_xray = scaled_unprocessed_xray[top_bound:top_bound+pxray.shape[0], left_bound: right_bound]
+    true_xray_overlay = scaled_unprocessed_xray
+    true_xray_overlay[top_bound:top_bound+pxray.shape[0], left_bound: right_bound] = 0.3*pxray+0.7*cropped_unprocessed_xray
+
+
+    overlay = 0.7*cropped_xray + 0.3*pxray
     difference = cropped_xray-pxray
     #plt.imshow(overlay, cmap='gray')
     #plt.show()
     
     fg, ax = plt.subplots(2,2)
-    fg.suptitle("Angle " + str(angle_achieved_at) + ", Scale " + str(scale_achieved_at)+ ", Height " + str(height_achieved_at))
+    rotation_relative_to_true_coronal = (angle+angle_achieved_at)%360
+    if rotation_relative_to_true_coronal >180:
+        rotation_relative_to_true_coronal = -1*(360-rotation_relative_to_true_coronal)
+    
+    fg.suptitle("Angle " + str(rotation_relative_to_true_coronal) + ", Scale " + str(scale_achieved_at)+ ", Height " + str(height_achieved_at))
     ax[0][0].imshow(cropped_xray, cmap= 'gray')
     ax[0][0].set_title("Enhanced_xray")
     ax[0][1].imshow(pxray, cmap= 'gray')
@@ -593,23 +580,108 @@ def registration_experiment(patient, side, rot_start, rot_num_images, rot_step,s
 
     plt.savefig("results\\"+patient+"_"+side+"_registered_images.png")
 
+    fg2, ax2 = plt.subplots(1,3)
+    ax2[0].imshow(resized_first_xray, cmap ='gray', vmin =0, vmax =255)
+    ax2[0].set_title("Original Xray")
+    ax2[1].imshow(unrotated_pxray, cmap ='gray', vmin =0, vmax =255)
+    ax2[1].set_title("Unrotated Pseudo-Xray")
+    ax2[2].imshow(true_xray_overlay, cmap ='gray', vmin = 0, vmax = 255)
+    ax2[2].set_title("Registered Pseudo-Xray to Xray")
+    plt.savefig("results\\"+patient+"_"+side+"_unprocessed_images.png")
+    
+
+
+angles = {  "9911221_LEFT_1":10,
+            "9911221_RIGHT_1":345,
+            "9911721_LEFT_1":7,
+            "9911721_RIGHT_1":352,
+            "9912946_LEFT_1":11,
+            "9912946_RIGHT_1":350,
+            "9917307_LEFT_1":7,
+            "9917307_RIGHT_1":353,
+            "9918802_LEFT_1":8,
+            "9918802_RIGHT_1":352,
+            "9921811_LEFT_1":2,
+            "9921811_RIGHT_1":356,
+            "9924274_LEFT_1":8,
+            "9924274_RIGHT_1":357,
+            "9937239_LEFT_1":10,
+            "9937239_RIGHT_1":350,
+            "9938236_LEFT_1":1,
+            "9938236_RIGHT_1":358,
+            "9943227_LEFT_1":3,
+            "9943227_RIGHT_1":353,
+            "9947240_LEFT_1":10,
+            "9947240_RIGHT_1":347,
+            "9958234_LEFT_1":4,
+            "9958234_RIGHT_1":356,
+            "9964731_LEFT_1":9,
+            "9964731_RIGHT_1": 353 ,
+            "9002116_LEFT_1":5,
+
+            "9986355_LEFT_1": 13,
+            "9986355_RIGHT_1": 345,
+            "9986838_LEFT_1":4,
+            "9986838_RIGHT_1":355,
+            "9988027_LEFT_1":8,
+            "9988027_RIGHT_1":350,
+            "9988186_LEFT_1":7,
+            "9988186_RIGHT_1":350,
+            "9988305_LEFT_1":0,
+            "9988305_RIGHT_1":355,
+            "9988820_LEFT_1":6,
+            "9988820_RIGHT_1":353,
+
+            "9988421_RIGHT_1":353,
+            "9988891_LEFT_1":4,
+            "9988891_RIGHT_1":346,
+            "9988921_LEFT_1":9,
+            "9988921_RIGHT_1":348,
+            "9989309_LEFT_1":9,
+            "9989309_RIGHT_1":348,
+            "9989352_LEFT_1":2,
+            "9989352_RIGHT_1":354,
+            "9989700_LEFT_1":8,
+            "9989700_RIGHT_1":347,
+            "9990072_LEFT_1":4,
+            "9990072_RIGHT_1": 356,
+            "9990192_LEFT_1":3,
+
+            "9990355_LEFT_1":8,
+            "9991018_LEFT_1":6,
+            "9991313_LEFT_1":11,
+            "9991580_LEFT_1":6,
+            "9986207_LEFT_1":16,
+            "9030296_LEFT_1":11,
+            "9030418_LEFT_1":10,
+            "9030718_LEFT_1":7,
+            "9030925_LEFT_1":6,
+            "9031141_LEFT_1":7,
+            "9031426_LEFT_1":8,
+            "9031930_LEFT_1":8,
+            "9031961_LEFT_1":3,
+            "9000622_LEFT_1":4,
+            "9002316_LEFT_1":4,
+            "9002411_LEFT_1":14,
+            "9002430_LEFT_1":9,
+            "9002817_LEFT_1":8,
+            "9003126_LEFT_1":3}
+                            
 
 
 
 
 
+patients = ["9002316", "9002411", "9002817", "9911221", "9911721", "9917307", "9918802", "9921811", "9924274", "9947240", "9938236", "9943227", "9958234"]
+patient_angles = []
+for i in range (0, len(patients)):
+    patient_angles.append(angles[patients[i]+"_LEFT_1"])
+patient_tib_centres = [(170,300), (170,300),(170, 270), (170,303),(170,239), (185,325), (121,286), (179,321),(207,312) , (170,339), (181, 317), (203,326), (155,343)]
+patient_pat_centres = [(170,220), (170,196), (170,186), (155,232),(182,169), (170,200), (103,195), (178,226), (199, 208), (169,238), (174, 236), (206,240), (146,239)]
 
-
-patients = ["9002316", "9002411", "9002817", "9911221", "9911721", "9917307", "9918802", "9921811", "9924274", "9947240"]
-patient_tib_centres = [(170,300), (170,300),(170, 270), (170,303),(170,239), (185,325), (121,286), (179,321),(207,312) , (170,339)]
-patient_pat_centres = [(170,220), (170,196), (170,186), (155,232),(182,169), (170,200), (103,195), (178,226), (199, 208), (169,238)]
-
-for i in range (5, len(patients)):
+for i in range (0, len(patients)):
     print(i)
-    registration_experiment(patients[i], "LEFT", 348,6,4, 1, 64, 6, 6, 4, 4, 4, patient_pat_centres[i], patient_tib_centres[i], 32)
-
-
-
+    registration_experiment(patients[i], "LEFT", 340,10,4, 1, 64, 3, 3, 4, 2, 2, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i])
 
 
 
