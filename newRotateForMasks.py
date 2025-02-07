@@ -180,7 +180,7 @@ def generateTrueCoronalTrainingData(patients, patientAngles, filename, save = Tr
         os.chdir(currDir)
     return allImages
 
-def prep_volume_efficient(mask):
+def prep_volume_efficient(mask, coronal_width_scalar = 1.92):
 
     #OPTION 2: origional approach which produces 424x424 slices
     #we make a circumcircle around where the knee data is in the image, and padd the image to fit the circumcircle as an incircle
@@ -196,8 +196,18 @@ def prep_volume_efficient(mask):
         image = mask[k]
         image = np.where(image[0:300] !=0,1,0).astype(np.uint8)
         #print(image.shape)
-        image = cv2.resize(image, (300, 300))
-        newImage = cv2.copyMakeBorder(image, paddingAmount, paddingAmount, paddingAmount, paddingAmount, cv2.BORDER_CONSTANT, None, value=0)
+        #image = cv2.resize(image, (300,300))
+        image = cv2.resize(image, (0,0), fx=coronal_width_scalar, fy= 1) #if you start getting errors with this function set coronal_width_scalar back to 2
+        coronal_width = image.shape[1]
+        extra_padding = (300-coronal_width)//2
+        leftPadding = paddingAmount + extra_padding
+        rightPadding = paddingAmount+extra_padding
+
+        if (300-coronal_width)%2 != 0:
+            leftPadding +=1
+        
+        newImage = cv2.copyMakeBorder(image, paddingAmount, paddingAmount, leftPadding, rightPadding, cv2.BORDER_CONSTANT, None, value=0)
+        #print(newImage.shape)
         newVolume[k] = newImage
     return newVolume
 
@@ -219,6 +229,8 @@ def rotate_volume(mask, angle, alreadyPadded = False, without_cartilidge = False
     return newMask
 
 
+_, mask = loadPatientMask("9911221", "LEFT", "1")
+rotated_volume = rotate_volume(mask, 0, without_cartilidge=True)
 
 
 #patientAngles = [350, 353, 349, 353, 352, 358, 352, 350, 359, 357]
