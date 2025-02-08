@@ -4,6 +4,8 @@ from matplotlib import pyplot as plt
 
 from readMLMasks import loadPatientMask
 import cv2
+from intensity_registration import pre_process_xray_tibialvals, pre_process_pxray
+import os
 
 
 def old_rotate(image, angle):
@@ -145,3 +147,46 @@ def coronal_axial_correspondance(patient, side, angle, axial_slice_num):
 #coronal_axial_correspondance("9911221", "LEFT", 350, 100)
 
 
+
+def xray_processing_image(patient, side, xray_patella_centre, tibial_coordinates, kernel_size):
+    original_xray = cv2.imread("xrays\\"+patient+"_"+side.lower()+"_xray.jpg", cv2.IMREAD_GRAYSCALE)
+    xray_patella_mask = cv2.imread("xrays\\"+patient+"_"+side.lower()+"_xray_contour.png", cv2.IMREAD_GRAYSCALE)
+    path = "report\\xray_processing_image\\"+patient+"\\"+ side+"\\" 
+    if not os.path.exists(path):
+        os.makedirs(path)
+    
+
+    xray = pre_process_xray_tibialvals(original_xray, xray_patella_mask, xray_patella_centre, tibial_coordinates, kernel_size, save = True, save_location=path)
+
+
+"""
+
+i = patients.index("9031961")
+xray_processing_image("9031961", "LEFT", patient_pat_centres[i], patient_tib_centres[i], 32)
+"""
+
+def get_pxray(patient, side, angle):
+    resize = 1
+    _, volume = loadPatientMask(patient, side, "1")
+    patella_volume = cv2.threshold((cv2.threshold(volume,2,7,cv2.THRESH_TOZERO))[1], 3,7, cv2.THRESH_TOZERO_INV)[1] #3 in the array
+    rotated_patella_volume = rotate_volume(patella_volume,angle)
+    just_patella = cv2.resize(np.where(MRI_to_Xray(rotated_patella_volume)>= 0.01,255,0).astype(np.uint8),(0,0), fx=resize, fy=resize)
+    rotated_volume = rotate_volume(volume, angle, without_cartilidge=True)
+    pxray = pre_process_pxray(rotated_volume, just_patella, 85, 115, resize)
+
+    path = "report\\pxrays\\"+patient+"\\"+ side+"\\"
+    if not os.path.exists(path):
+        os.makedirs(path)
+    path = path  +"angle"+str(angle) +"_pxray.png"
+    
+    cv2.imwrite(path, pxray)
+
+
+
+patients = ["9002316", "9002411", "9002817", "9911221", "9911721", "9917307", "9918802", "9921811", "9924274", "9947240", "9938236", "9943227", "9958234", "9964731", "9986355", "9986838", "9989352", "9989700", "9990192", "9990355", "9986207","9030925", "9031141", "9031930", "9031961", "9033937", "9034451", "9034677", "9034812", "9034963"]
+patient_tib_centres = [(170,300), (170,300),(170, 270), (170,303),(170,239), (185,325), (121,286), (179,321),(207,312) , (170,339), (181, 317), (203,326), (155,343),(183,269), (200,310), (158,307), (192,298), (170,300), (170,311), (179,338), (212,311),(192,335), (150,266), (180,354), (164,332), (178,350), (145,296), (156,256), (159,317), (209,329)]
+patient_pat_centres = [(170,220), (170,196), (170,186), (155,232),(182,169), (170,200), (103,195), (178,226), (199, 208), (169,238), (174, 236), (206,240), (146,239), (209,172), (211,216), (153,198), (193,208), (178,206), (164,222), (170,201), (197,222), (204,158), (138,160), (215,195), (156,235), (170,197), (148,199), (151,167), (153,232), (209,238)]
+
+i = patients.index("9964731")
+xray_processing_image(patients[i], "LEFT", patient_pat_centres[i], patient_tib_centres[i], 32)
+get_pxray(patients[i], "LEFT", 0)

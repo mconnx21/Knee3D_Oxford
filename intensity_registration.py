@@ -44,8 +44,10 @@ def pre_process_xray_tibialvals(xray_image, xray_patella_mask, xray_patella_cent
     return xray_image
 """
 
-def pre_process_xray_tibialvals(xray_image, xray_patella_mask, xray_patella_centre, tibial_coordinates, kernel_size):
-
+def pre_process_xray_tibialvals(xray_image, xray_patella_mask, xray_patella_centre, tibial_coordinates, kernel_size, save = False, save_location = ""):
+    if save:
+        filename = save_location+"original_xray.png"
+        cv2.imwrite(filename, xray_image)
     PXRAY_TIBIAL_VAL  = 80 # contant
 
     blurred = np.copy(xray_image)
@@ -54,6 +56,11 @@ def pre_process_xray_tibialvals(xray_image, xray_patella_mask, xray_patella_cent
 
 
     thresholded_mask = cv2.adaptiveThreshold(blurred, 255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 0)
+    if save:
+        filename = save_location + "thresholded_mask.png"
+        cv2.imwrite(filename, thresholded_mask)
+
+
     
     #plt.imshow(thresholded_mask, cmap = 'gray')
     #plt.show()
@@ -62,12 +69,20 @@ def pre_process_xray_tibialvals(xray_image, xray_patella_mask, xray_patella_cent
     min_val = np.min(sample)
     
     xray_image = xray_image + (12/255)*thresholded_mask
+
+    if save:
+        filename = save_location + "pre_thresholding.png"
+        cv2.imwrite(filename, xray_image)
     
     
     #plt.imshow(xray_image, cmap ='gray')
     #plt.show()
     xray_image = cv2.threshold(xray_image, min_val, 255, cv2.THRESH_TOZERO)[1]
     xray_image = (PXRAY_TIBIAL_VAL / min_val) *xray_image
+
+    if save:
+        filename = save_location + "post_thresholding.png"
+        cv2.imwrite(filename, xray_image)
     
     
     #now want to find the average patella brightness so that I can enhance.
@@ -81,6 +96,10 @@ def pre_process_xray_tibialvals(xray_image, xray_patella_mask, xray_patella_cent
     PXRAY_PAT_AVG = 125
     amount_brightness_to_add = PXRAY_PAT_AVG- avg_patella_val
     xray_image = xray_image + amount_brightness_to_add*brightest_mask
+
+    if save:
+        filename = save_location + "post_enhancement.png"
+        cv2.imwrite(filename, xray_image)
     
     #plt.imshow(xray_image, cmap = 'gray', vmin = 0, vmax = 255)
     #plt.show()
@@ -665,25 +684,41 @@ angles = {  "9911221_LEFT_1":10,
             "9002411_LEFT_1":14,
             "9002430_LEFT_1":9,
             "9002817_LEFT_1":8,
-            "9003126_LEFT_1":3}
+            "9003126_LEFT_1":3,
+
+            "9033937_LEFT_1":4,
+            "9034451_LEFT_1": 7,
+            "9034644_LEFT_1":0,
+            "9034812_LEFT_1":7,
+            "9034963_LEFT_1": 359,
+            "9034991_LEFT_1":14,
+            "9035317_LEFT_1":3,
+            "9035647_LEFT_1":4,
+            "9988421_LEFT_1":357,
+            "9990698_LEFT_1":356,
+            "9034677_LEFT_1":358,
+            "9035449_LEFT_1":357
+            
+            }
                             
 
 
 #PATIENT 9964731 is a very good example of an xray with a wildly misaligned patella
 
+"""
 
-patients = ["9002316", "9002411", "9002817", "9911221", "9911721", "9917307", "9918802", "9921811", "9924274", "9947240", "9938236", "9943227", "9958234", "9964731"]
+patients = ["9002316", "9002411", "9002817", "9911221", "9911721", "9917307", "9918802", "9921811", "9924274", "9947240", "9938236", "9943227", "9958234", "9964731", "9986355", "9986838", "9989352", "9989700", "9990192", "9990355", "9986207","9030925", "9031141", "9031930", "9031961", "9033937", "9034451", "9034677", "9034812", "9034963"]
 patient_angles = []
 for i in range (0, len(patients)):
     patient_angles.append(angles[patients[i]+"_LEFT_1"])
-patient_tib_centres = [(170,300), (170,300),(170, 270), (170,303),(170,239), (185,325), (121,286), (179,321),(207,312) , (170,339), (181, 317), (203,326), (155,343),(183,269)]
-patient_pat_centres = [(170,220), (170,196), (170,186), (155,232),(182,169), (170,200), (103,195), (178,226), (199, 208), (169,238), (174, 236), (206,240), (146,239), (209,172)]
+patient_tib_centres = [(170,300), (170,300),(170, 270), (170,303),(170,239), (185,325), (121,286), (179,321),(207,312) , (170,339), (181, 317), (203,326), (155,343),(183,269), (200,310), (158,307), (192,298), (170,300), (170,311), (179,338), (212,311),(192,335), (150,266), (180,354), (164,332), (178,350), (145,296), (156,256), (159,317), (209,329)]
+patient_pat_centres = [(170,220), (170,196), (170,186), (155,232),(182,169), (170,200), (103,195), (178,226), (199, 208), (169,238), (174, 236), (206,240), (146,239), (209,172), (211,216), (153,198), (193,208), (178,206), (164,222), (170,201), (197,222), (204,158), (138,160), (215,195), (156,235), (170,197), (148,199), (151,167), (153,232), (209,238)]
 
-for i in range (0, len(patients)):
+for i in range (14, len(patients)):
     print(i)
     registration_experiment(patients[i], "LEFT", 336,11,4, 1, 64, 3, 3, 4, 2, 2, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i])
 
-
+"""
 
 
 
