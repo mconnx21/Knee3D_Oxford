@@ -839,18 +839,23 @@ def run_multiple_experiments(patient_index, similarity_measure, experiment_type)
     else:
         if similarity_measure == 'gmi':
             gmi_step_4_results_corrected = [4, 10, 356, 10, 355,15,12,358,12,354,5,359,0,345,353,4,2,0,3,16,12,358,11,20,7,356,359,2,11,3] #these are indexed in roder of patients with none missing
-            gmi_step_4_results_raw = []
+            gmi_step_4_results_raw = [0,356,348,0,348,8,4,356,4,344,4,356,356,336,340,0,0,352,0,8,356,352,4,12,4,352,352,4,4,4]
 
-            for i in range(0,len(gmi_step_4_results_corrected)):
+            """for i in range(0,len(gmi_step_4_results_corrected)):
                 patient = patients[i]
                 raw_angle = (gmi_step_4_results_corrected[i] - patient_angles[i]) %360
                 gmi_step_4_results_raw.append(raw_angle)
+                f = open("temp_angles.text", "a")
+                f.write(str(raw_angle)+",")
+                f.close()
+            """
             
             fine_experiment(patient_index, similarity_measure, gmi_step_4_results_raw)
         
         elif similarity_measure == 'entropy':
-            #tbc to make this reproducible - need to generate from running it again
-            pass
+            entropy_step_4_results_raw = [0,356,352,0,344,4,4,356,0,352,0,356,0,340,344,356,356,352,4,8,356,348,8,352,356,344,356,4,4,8]
+
+            fine_experiment(patient_index, similarity_measure, entropy_step_4_results_raw)
 
         elif similarity_measure =="mi":
             mi_step_4_results_raw = [356,356,348,0,348,8,4,356,4,352,4,352, 356,336,340,0,356,352,0, 0,356,348,4,8,4,356,356,0,0,0]
@@ -863,7 +868,8 @@ def run_multiple_experiments(patient_index, similarity_measure, experiment_type)
             fine_experiment(patient_index, similarity_measure, gmie_step_4_results_raw)
         
         elif similarity_measure == "gradient_difference":
-            pass
+            gradientdiff_step_4_results_raw = [352,352,356,12,348,336,4,0,0,348,0,4,4,16,340,352,16,352,8,8,356,0,12,16,4,336,348,0,344,356]
+            fine_experiment(patient_index, similarity_measure, gradientdiff_step_4_results_raw)
             #will come back to this but will be great to get gradient difference stats too
 
 
@@ -896,8 +902,8 @@ mi_step_4_results_raw = [356,356,348,0,348,8,4,356,4,352,4,352, 356,336,340,0,35
 
 #patient_index = [patients.index("9990355")]
 patient_index = range(0, len(patients))
-similarity_measure = "gmi_e"
-experiment_type = "coarse"
+similarity_measure = "gmi"
+experiment_type = "fine"
 
 run_multiple_experiments(patient_index, similarity_measure, experiment_type)
 
