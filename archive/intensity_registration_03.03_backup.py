@@ -450,6 +450,40 @@ def plot_entropies(volume, start, num_images, step, xray, scale, num_bins):
 #***********************************************************EXPERIMENTS / REGISTRATION PROCEDURES ***********************************
 
 
+#this is when we only allow rotational degree of freedom but I think it's out of date
+def rotational_freedom(volume, start, num_images, step, xray, xray_patella_mask, scalar, num_bins):
+    patella_volume = cv2.threshold((cv2.threshold(volume,2,7,cv2.THRESH_TOZERO))[1], 3,7, cv2.THRESH_TOZERO_INV)[1] #3 in the array
+    xray_patella_mask, xray_contours = get_xray_patella(xray_patella_mask)
+    entropies = []
+
+    for i in range (0, num_images):
+        angle = (start + step*i)%360
+
+    
+        rotated_patella_volume = rotate_volume(patella_volume,angle)
+        just_patella = np.where(MRI_to_Xray(rotated_patella_volume)>= 0.01,255,0).astype(np.uint8)
+        contour_mask, pxray_contours = get_pxray_patella(just_patella)
+
+
+        
+        rotated_volume = rotate_volume(volume, angle, without_cartilidge=True)
+        pxray = 255*MRI_to_Xray(rotated_volume)
+
+        
+        scaled_xray, pxray_centre, xray_centre = scale_initial(xray, xray_contours[2:3], pxray, pxray_contours)
+        cropped_xray ,top_bound, bottom_bound, left_bound, right_bound, pre_cropped_xray= crop_scaled_xray(scaled_xray, pxray_centre, xray_centre, pxray)
+        print(top_bound, left_bound)
+
+        overlay = 0.5*cropped_xray + 0.5*pxray
+        #plt.imshow(overlay, cmap ='gray')
+        #plt.show()
+        
+
+        entropy = entropy_of_difference(cropped_xray, pxray, scalar, num_bins)
+        entropies.append(entropy)
+        print(entropy)
+    
+    return entropies
 
 #given the original xray, the current position of it, and the pxray, test different vertical translations
 def vertical_translational_freedom(xray, top_bound, left_bound, num_up, num_down, step, pxray, scalar, num_bins,  angle, scale_factor, measure = 'entropy', noise_constant =10,):
@@ -469,11 +503,11 @@ def vertical_translational_freedom(xray, top_bound, left_bound, num_up, num_down
     while (i< total_num_trans):
         print("Top postition is ", top)
         heights.append(top)
-
+        #print(w, h)
+        #print(xray.shape)
         cropped_xray = xray[top:(top+h), left_bound:(left_bound+w)] 
-
+        #print(cropped_xray.shape)
         """
-        #commented code below allows us to generate pics at every tested psoition - we use this for manually inspecting best registration
         overlay = 0.5*cropped_xray + 0.5*pxray
         #plt.imshow(overlay, cmap ='gray', vmin = 0, vmax= 255)
         #plt.show()
@@ -524,10 +558,6 @@ def vertical_translational_freedom(xray, top_bound, left_bound, num_up, num_down
             entropy = mutual_information(cropped_xray, pxray, num_bins)
         elif measure == 'gmi':
             entropy = GMI(cropped_xray, pxray, num_bins)
-        elif measure == 'gmi_e':
-            entropy = GMI_e(cropped_xray, pxray, num_bins)
-        
-        
 
         entropies.append(entropy)
         print("Entropy of  this angle at height ", top, "is ", entropy)
@@ -539,7 +569,65 @@ def vertical_translational_freedom(xray, top_bound, left_bound, num_up, num_down
     print("heights are ", heights)
     return entropies, heights
 
-#tests three degrees of freedom: rotation scale factor and vertical translation
+
+def rotation_and_vert(volume, rot_start, rot_num_images, rot_step, xray, xray_patella_mask, scalar, num_bins, num_up, num_down, trans_step):
+    patella_volume = cv2.threshold((cv2.threshold(volume,2,7,cv2.THRESH_TOZERO))[1], 3,7, cv2.THRESH_TOZERO_INV)[1] #3 in the array
+    xray_patella_mask, xray_contours = get_xray_patella(xray_patella_mask)
+    #contoured_xray = cv2.drawContours(xray, xray_contours, -1, 255, 1)
+    #plt.imshow(contoured_xray)
+    #plt.show()
+    #xray_contour = xray_contours[2:3] #for 9911221 , need to fix
+    print(len(xray_contours))
+    #xray_contour = xray_contours[1:2] # for 9947240 need to fix
+    entropies = []
+    angles = []
+
+    for i in range (0, rot_num_images):
+        
+        angle = (rot_start + rot_step*i)%360
+        angles.append(angle)
+        print("Angle ", angle)
+        print("------------------------")
+
+    
+        rotated_patella_volume = rotate_volume(patella_volume,angle)
+        just_patella = np.where(MRI_to_Xray(rotated_patella_volume)>= 0.01,255,0).astype(np.uint8)
+        contour_mask, pxray_contours = get_pxray_patella(just_patella)
+
+
+        
+        rotated_volume = rotate_volume(volume, angle, without_cartilidge=True)
+        pxray = 255*1.3*MRI_to_Xray(rotated_volume)
+
+        
+        scaled_xray, pxray_centre, xray_centre = scale_initial(xray, xray_contours, pxray, pxray_contours)
+        cropped_xray ,top_bound, bottom_bound, left_bound, right_bound, scaled_xray = crop_scaled_xray(scaled_xray, pxray_centre, xray_centre, pxray)
+
+        print(top_bound, left_bound)
+        print("Starting vertical translation entropies for angle ", str(angle))
+
+        vert_entropies, heights = vertical_translational_freedom(scaled_xray, top_bound, left_bound, num_up, num_down, trans_step, pxray, scalar, num_bins)
+
+        
+
+        #overlay = 0.5*cropped_xray + 0.5*pxray
+        #plt.imshow(overlay, cmap ='gray')
+        #plt.show()
+        
+
+        entropy = np.min (vert_entropies)
+        height_of_min_entropy = heights[np.argmin(vert_entropies)]
+        entropies.append((entropy, height_of_min_entropy))
+        print("Minimum entropy for angle ", str(angle), " is ", entropy, " at height ", height_of_min_entropy)
+    print(entropies)
+    print(min(entropies))
+    min_entropy, height_achieved_at = min(entropies)
+    angle_achieved_at = angles[np.argmin(entropies)]
+    
+    return entropies, min_entropy, angle_achieved_at, height_achieved_at
+
+
+
 def rot_scale_vert(volume, rot_start, rot_num_images, rot_step, xray, xray_patella_mask, scalar, num_bins, num_up, num_down, trans_step, num_inflate, num_deflate, resize = 0.5, measure ='entropy', noise_constant =10):
     patella_volume = cv2.threshold((cv2.threshold(volume,2,7,cv2.THRESH_TOZERO))[1], 3,7, cv2.THRESH_TOZERO_INV)[1] #3 in the array
     xray_patella_mask, xray_contours = get_xray_patella(xray_patella_mask)
@@ -631,7 +719,7 @@ def rot_scale_vert(volume, rot_start, rot_num_images, rot_step, xray, xray_patel
     return angle_entropies, min_angle_entropy, angle_achieved_at, scale_achieved_at, height_achieved_at
 
 
-#full experiment to take in patient xray and mri volume and register them given the search parameters
+
 def registration_experiment(patient, side, rot_start, rot_num_images, rot_step,scalar, num_bins, num_up, num_down, trans_step, num_inflate, num_deflate, xray_patella_centre, tibial_coordinates, kernel_size, angle, resize =0.5, measure = 'entropy', noise_constant =10):
     _, volume = loadPatientMask(patient, side, "1")
     xray_patella_mask = cv2.imread("xrays\\"+patient+"_"+side.lower()+"_xray_contour.png", cv2.IMREAD_GRAYSCALE)
@@ -714,7 +802,6 @@ def registration_experiment(patient, side, rot_start, rot_num_images, rot_step,s
     plt.savefig("results\\"+patient+"_"+side+"_unprocessed_images.png")
     
 
-#************************************************************DATA FOR USE IN TESTING***********************************
 
 angles = {  "9911221_LEFT_1":10,
             "9911221_RIGHT_1":345,
@@ -806,6 +893,11 @@ angles = {  "9911221_LEFT_1":10,
             "9035449_LEFT_1":357
             
             }
+                            
+
+
+#PATIENT 9964731 is a very good example of an xray with a wildly misaligned patella
+
 
 
 patients = ["9002316", "9002411", "9002817", "9911221", "9911721", "9917307", "9918802", "9921811", "9924274", "9947240", "9938236", "9943227", "9958234", "9964731", "9986355", "9986838", "9989352", "9989700", "9990192", "9990355", "9986207","9030925", "9031141", "9031930", "9031961", "9033937", "9034451", "9034677", "9034812", "9034963"]
@@ -815,81 +907,16 @@ for i in range (0, len(patients)):
 patient_tib_centres = [(170,300), (170,300),(170, 270), (170,303),(170,239), (185,325), (121,286), (179,321),(207,312) , (170,339), (181, 317), (203,326), (155,343),(183,269), (200,310), (158,307), (192,298), (170,300), (170,311), (179,338), (212,311),(192,335), (150,266), (120,339), (164,332), (178,350), (145,296), (156,256), (159,317), (209,329)]
 patient_pat_centres = [(170,220), (170,196), (170,186), (155,232),(182,169), (170,200), (103,195), (178,226), (199, 208), (169,238), (174, 236), (206,240), (146,239), (209,172), (211,216), (153,198), (193,208), (178,206), (164,222), (170,201), (197,222), (204,158), (138,160), (100,166), (156,235), (170,197), (148,199), (151,167), (153,232), (209,238)]
 
-                            
 
-
-#PATIENT 9964731 is a very good example of an xray with a wildly misaligned patella
-
-#we will define two experiment types - one which does coars 4-angle steps and one which refines given a rough registration
-def coarse_experiment(patient_index, similarity_measure):
-    for i in patient_index:
-        print(i)
-        registration_experiment(patients[i], "LEFT", 336,11, 4,1, 64, 3, 3, 4, 2, 2, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255)
-
-def fine_experiment(patient_index, similarity_measure, raw_coarse_angles):
-    for i in patient_index:
-        print(i)
-        registration_experiment(patients[i], "LEFT", raw_coarse_angles[i]-3,8, 1,1, 64, 12, 12, 2, 3, 3, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255)
-
-
-def run_multiple_experiments(patient_index, similarity_measure, experiment_type):
-
-    if experiment_type == "coarse":
-        coarse_experiment(patient_index, similarity_measure)
-    else:
-        if similarity_measure == 'gmi':
-            gmi_step_4_results_corrected = [4, 10, 356, 10, 355,15,12,358,12,354,5,359,0,345,353,4,2,0,3,16,12,358,11,20,7,356,359,2,11,3] #these are indexed in roder of patients with none missing
-            gmi_step_4_results_raw = [0,356,348,0,348,8,4,356,4,344,4,356,356,336,340,0,0,352,0,8,356,352,4,12,4,352,352,4,4,4]
-
-            """for i in range(0,len(gmi_step_4_results_corrected)):
-                patient = patients[i]
-                raw_angle = (gmi_step_4_results_corrected[i] - patient_angles[i]) %360
-                gmi_step_4_results_raw.append(raw_angle)
-                f = open("temp_angles.text", "a")
-                f.write(str(raw_angle)+",")
-                f.close()
-            """
-            
-            fine_experiment(patient_index, similarity_measure, gmi_step_4_results_raw)
-        
-        elif similarity_measure == 'entropy':
-            entropy_step_4_results_raw = [0,356,352,0,344,4,4,356,0,352,0,356,0,340,344,356,356,352,4,8,356,348,8,352,356,344,356,4,4,8]
-
-            fine_experiment(patient_index, similarity_measure, entropy_step_4_results_raw)
-
-        elif similarity_measure =="mi":
-            mi_step_4_results_raw = [356,356,348,0,348,8,4,356,4,352,4,352, 356,336,340,0,356,352,0, 0,356,348,4,8,4,356,356,0,0,0]
-
-            fine_experiment(patient_index, similarity_measure, mi_step_4_results_raw)
-        elif similarity_measure == "gmi_e":
-            
-            gmie_step_4_results_raw = [0,356,348,0,348,4,4,356,4,344,4,352,356,336,340,0,0,352,0,0,356,352,4,8,4,0,356,4,0,0]
-            
-            fine_experiment(patient_index, similarity_measure, gmie_step_4_results_raw)
-        
-        elif similarity_measure == "gradient_difference":
-            gradientdiff_step_4_results_raw = [352,352,356,12,348,336,4,0,0,348,0,4,4,16,340,352,16,352,8,8,356,0,12,16,4,336,348,0,344,356]
-            fine_experiment(patient_index, similarity_measure, gradientdiff_step_4_results_raw)
-            #will come back to this but will be great to get gradient difference stats too
-
-
-        
-
-
-#for the search procedure we first check angles in steps of 4, doing the registration experiment with parameters 336,11,4, 1, 64, 3, 3, 4, 2, 2,
-#then we refine to do 1 degree checks around the best fit
-#the array below gives the angles relative to true coronal of the 4-step registration with gmi
-
-"""
 gmi_step_4_results_corrected = [4, 10, 356, 10, 355,15,12,358,12,354,5,359,0,345,353,4,2,0,3,16,12,358,11,20,7,356,359,2,11,3] #these are indexed in roder of patients with none missing
 gmi_step_4_results_raw = []
-
+"""
 with open("temp_angles.text", "r") as file:
     a = [line.strip() for line in file]
 
 entropy_step_4_results_raw = list(map(int,a[0].split(",")))
 #print(entropy_step_4_results_raw)
-
+"""
 
 for i in range(0,len(gmi_step_4_results_corrected)):#range(len(patients)):
     patient = patients[i]
@@ -897,17 +924,14 @@ for i in range(0,len(gmi_step_4_results_corrected)):#range(len(patients)):
     gmi_step_4_results_raw.append(raw_angle)
 
 mi_step_4_results_raw = [356,356,348,0,348,8,4,356,4,352,4,352, 356,336,340,0,356,352,0, 0,356,348,4,8,4,356,356,0,0,0]
-"""
 
-
+#patient_index = [10,11,12,13,14,15,16,17,18,19,20,26,27,28,29]
+#patient_index = [26,27,28,29]
 #patient_index = [patients.index("9990355")]
 patient_index = range(0, len(patients))
-similarity_measure = "gmi"
-experiment_type = "fine"
+#patient_index = [10,11,12,13,14,15,16,17,18,19,20]
 
-run_multiple_experiments(patient_index, similarity_measure, experiment_type)
 
-"""
 for i in patient_index:
     print(i)
     registration_experiment(patients[i], "LEFT", gmi_step_4_results_raw[i]-3,8, 1,1, 64, 12, 12, 2, 3, 3, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = 'gmi', noise_constant = 255)
@@ -918,6 +942,6 @@ for i in patient_index:
 #_,_, 1,1, 64, 12, 12, 2, 3, 3,  - for refined search
 
 #gradient different isn't good here. Entropy needs some improving. Come back to this.
-"""
+
 
 
