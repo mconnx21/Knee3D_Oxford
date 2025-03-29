@@ -1,0 +1,12 @@
+Python 3.10.13 | packaged by Anaconda, Inc. | (main, Sep 11 2023, 13:15:57) [MSC v.1916 64 bit (AMD64)] 
+math  
+numpy 1.26.4 
+cv2 4.10.0 
+os  
+pathlib.Path  
+matplotlib.pyplot  
+random  
+SimpleITK 2.4.0 
+skimage.measure 0.23.2 
+sys  
+pydicom 3.0.1 
