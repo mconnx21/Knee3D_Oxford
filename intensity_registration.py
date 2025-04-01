@@ -5,6 +5,7 @@ from matplotlib import pyplot as plt
 import cv2
 from readMLMasks import loadPatientMask
 import random
+import math
 
 """
 #old version of the function we keep for reference until final software complete
@@ -540,7 +541,7 @@ def vertical_translational_freedom(xray, top_bound, left_bound, num_up, num_down
     return entropies, heights
 
 #tests three degrees of freedom: rotation scale factor and vertical translation
-def rot_scale_vert(volume, rot_start, rot_num_images, rot_step, xray, xray_patella_mask, scalar, num_bins, num_up, num_down, trans_step, num_inflate, num_deflate, resize = 0.5, measure ='entropy', noise_constant =10):
+def rot_scale_vert(volume, rot_start, rot_num_images, rot_step, xray, xray_patella_mask, scalar, num_bins, num_up, num_down, trans_step, num_inflate, num_deflate, resize = 0.5, measure ='entropy', noise_constant =10, gradient_descent = False):
     patella_volume = cv2.threshold((cv2.threshold(volume,2,7,cv2.THRESH_TOZERO))[1], 3,7, cv2.THRESH_TOZERO_INV)[1] #3 in the array
     xray_patella_mask, xray_contours = get_xray_patella(xray_patella_mask)
     #contoured_xray = cv2.drawContours(xray, xray_contours, -1, 255, 1)
@@ -549,10 +550,13 @@ def rot_scale_vert(volume, rot_start, rot_num_images, rot_step, xray, xray_patel
 
     angle_entropies = []
     angles = []
+    done = False
+    angle = rot_start
+    images_done =0
+    decay =1
 
-    for i in range (0, rot_num_images):
+    while not done:
         
-        angle = (rot_start + rot_step*i)%360
         angles.append(angle)
         print("Angle ", angle)
         print("------------------------")
@@ -622,7 +626,54 @@ def rot_scale_vert(volume, rot_start, rot_num_images, rot_step, xray, xray_patel
         scale_of_min_entropy = scales[scale_entropies.index((angle_entropy, height_of_min_entropy))]
         angle_entropies.append((angle_entropy, scale_of_min_entropy, height_of_min_entropy))
         print("Minimum entropy for angle ", str(angle), " is ", angle_entropy, " at scale ", scale_of_min_entropy, " and height ", height_of_min_entropy)
-    
+
+        images_done+=1
+
+        if not gradient_descent:
+
+            angle = (angle +rot_step)%360
+            
+            if images_done >= rot_num_images:
+                done = True
+        
+        else:
+            
+            if images_done<=1:
+                angle = (angle +rot_step)%360
+            
+            else:
+
+                last = angle_entropies[-1][0]
+                secondlast= angle_entropies[-2][0]
+                changeiny = last-secondlast
+                lastx = angles[-1]
+                if lastx<180:
+                    lastx +=360
+                secondlastx = angles[-2]
+                if secondlastx<180:
+                    secondlastx +=360
+                changeinx = lastx-secondlastx
+
+                gradient = changeiny /changeinx
+                """
+                step = -1* rot_step/gradient
+                if abs(step) <1:
+                    step = int(step/abs(step))
+
+                """
+                size = max(1, rot_step*decay)
+                step = round(-1*np.sign(gradient)*size,0)
+                
+                
+
+                angle = (angle +step)%360
+            decay = decay*0.9
+            if images_done >= rot_num_images:
+                done = True
+
+
+
+
     print("angle entropies", angle_entropies)
     print("angles: ", angles)
     min_angle_entropy, scale_achieved_at, height_achieved_at = min(angle_entropies)
@@ -632,7 +683,7 @@ def rot_scale_vert(volume, rot_start, rot_num_images, rot_step, xray, xray_patel
 
 
 #full experiment to take in patient xray and mri volume and register them given the search parameters
-def registration_experiment(patient, side, rot_start, rot_num_images, rot_step,scalar, num_bins, num_up, num_down, trans_step, num_inflate, num_deflate, xray_patella_centre, tibial_coordinates, kernel_size, angle, resize =0.5, measure = 'entropy', noise_constant =10):
+def registration_experiment(patient, side, rot_start, rot_num_images, rot_step,scalar, num_bins, num_up, num_down, trans_step, num_inflate, num_deflate, xray_patella_centre, tibial_coordinates, kernel_size, angle, resize =0.5, measure = 'entropy', noise_constant =10, gradient_descent = False):
     _, volume = loadPatientMask(patient, side, "1")
     xray_patella_mask = cv2.imread("xrays\\"+patient+"_"+side.lower()+"_xray_contour.png", cv2.IMREAD_GRAYSCALE)
     original_xray = cv2.imread("xrays\\"+patient+"_"+side.lower()+"_xray.jpg", cv2.IMREAD_GRAYSCALE)
@@ -644,10 +695,13 @@ def registration_experiment(patient, side, rot_start, rot_num_images, rot_step,s
     xray = cv2.resize(xray, (0,0), fx=resize, fy =resize)
     xray_patella_mask =cv2.resize(xray_patella_mask, (0,0), fx=resize, fy =resize)
     np.save("results\\"+patient+"_"+side+"_enhanced_xray.npy", xray)
-    entropies, min_entropy, angle_achieved_at, scale_achieved_at, height_achieved_at = rot_scale_vert(volume, rot_start, rot_num_images,rot_step ,xray, xray_patella_mask, scalar, num_bins, num_up, num_down, trans_step, num_inflate, num_deflate, resize, measure=measure, noise_constant=noise_constant)
+    entropies, min_entropy, angle_achieved_at, scale_achieved_at, height_achieved_at = rot_scale_vert(volume, rot_start, rot_num_images,rot_step ,xray, xray_patella_mask, scalar, num_bins, num_up, num_down, trans_step, num_inflate, num_deflate, resize, measure=measure, noise_constant=noise_constant, gradient_descent=gradient_descent)
     print(entropies)
     print("Min entropy was ", min_entropy, " achieved at (angle, scale, height) ", angle_achieved_at, scale_achieved_at, height_achieved_at)
     np.savez_compressed("results\\"+patient+"_"+side+"_angleEntropies.npz", e= entropies, s = [min_entropy, angle_achieved_at, scale_achieved_at, height_achieved_at])
+    f = open("temp_angles.text", "w")
+    f.write(" ")
+    f.close()
     f = open("temp_angles.text", "a")
     f.write(str(angle_achieved_at)+",")
     f.close()
@@ -807,13 +861,20 @@ angles = {  "9911221_LEFT_1":10,
             
             }
 
-
-patients = ["9002316", "9002411", "9002817", "9911221", "9911721", "9917307", "9918802", "9921811", "9924274", "9947240", "9938236", "9943227", "9958234", "9964731", "9986355", "9986838", "9989352", "9989700", "9990192", "9990355", "9986207","9030925", "9031141", "9031930", "9031961", "9033937", "9034451", "9034677", "9034812", "9034963"]
+patients_neworder = ["9002316", "9002411", "9002817", "9030925", "9031141", "9031930", "9031961", "9033937", "9034451", "9034677", "9034812", "9034963", "9911221", "9911721", "9917307", "9918802", "9921811", "9924274",  "9938236", "9943227","9947240", "9958234", "9964731", "9986207", "9986355", "9986838", "9989352", "9989700", "9990192", "9990355"]
+patients_oldorder = ["9002316", "9002411", "9002817", "9911221", "9911721", "9917307", "9918802", "9921811", "9924274", "9947240", "9938236", "9943227", "9958234", "9964731", "9986355", "9986838", "9989352", "9989700", "9990192", "9990355", "9986207","9030925", "9031141", "9031930", "9031961", "9033937", "9034451", "9034677", "9034812", "9034963"]
+patients = patients_oldorder
+patient_tib_centres_dict = {"9002316":(170,300), "9002411":(170,300),"9002817":(170, 270), "9911221":(170,303),"9911721":(170,239), "9917307":(185,325), "9918802":(121,286), "9921811":(179,321),"9924274":(207,312) , "9947240":(170,339), "9938236":(181, 317), "9943227":(203,326), "9958234":(155,343),"9964731":(183,269), "9986355":(200,310), "9986838":(158,307), "9989352":(192,298), "9989700":(170,300), "9990192":(170,311), "9990355":(179,338), "9986207":(212,311), "9030925":(192,335), "9031141":(150,266), "9031930":(120,339), "9031961":(164,332),  "9033937":(178,350), "9034451":(145,296),"9034677":(156,256), "9034812":(159,317), "9034963":(209,329)}
+patient_pat_centres_dict = {"9002316":(170,220), "9002411":(170,196), "9002817":(170,186), "9911221":(155,232),"9911721":(182,169), "9917307":(170,200), "9918802":(103,195), "9921811":(178,226), "9924274":(199, 208), "9947240":(169,238), "9938236":(174, 236), "9943227":(206,240), "9958234":(146,239), "9964731":(209,172), "9986355":(211,216), "9986838":(153,198), "9989352":(193,208), "9989700":(178,206), "9990192":(164,222), "9990355":(170,201), "9986207":(197,222), "9030925":(204,158), "9031141":(138,160), "9031930":(100,166), "9031961":(156,235),  "9033937":(170,197), "9034451":(148,199), "9034677":(151,167), "9034812":(153,232), "9034963":(209,238)}
+patient_tib_centres = []
+patient_pat_centres = []
 patient_angles = []
 for i in range (0, len(patients)):
-    patient_angles.append(angles[patients[i]+"_LEFT_1"])
-patient_tib_centres = [(170,300), (170,300),(170, 270), (170,303),(170,239), (185,325), (121,286), (179,321),(207,312) , (170,339), (181, 317), (203,326), (155,343),(183,269), (200,310), (158,307), (192,298), (170,300), (170,311), (179,338), (212,311),(192,335), (150,266), (120,339), (164,332), (178,350), (145,296), (156,256), (159,317), (209,329)]
-patient_pat_centres = [(170,220), (170,196), (170,186), (155,232),(182,169), (170,200), (103,195), (178,226), (199, 208), (169,238), (174, 236), (206,240), (146,239), (209,172), (211,216), (153,198), (193,208), (178,206), (164,222), (170,201), (197,222), (204,158), (138,160), (100,166), (156,235), (170,197), (148,199), (151,167), (153,232), (209,238)]
+    patient = patients[i]
+    patient_angles.append(angles[patient+"_LEFT_1"])
+    patient_tib_centres.append(patient_tib_centres_dict[patient])
+    patient_pat_centres.append(patient_pat_centres_dict[patient])
+
 
                             
 
@@ -825,6 +886,7 @@ def coarse_experiment(patient_index, similarity_measure):
     for i in patient_index:
         print(i)
         registration_experiment(patients[i], "LEFT", 336,11, 4,1, 64, 3, 3, 4, 2, 2, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255)
+        #registration_experiment(patients[i], "LEFT", 336,22, 2,1, 64, 3, 3, 4, 2, 2, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255)
 
 def fine_experiment(patient_index, similarity_measure, raw_coarse_angles):
     for i in patient_index:
@@ -838,9 +900,8 @@ def run_multiple_experiments(patient_index, similarity_measure, experiment_type)
         coarse_experiment(patient_index, similarity_measure)
     else:
         if similarity_measure == 'gmi':
-            gmi_step_4_results_corrected = [4, 10, 356, 10, 355,15,12,358,12,354,5,359,0,345,353,4,2,0,3,16,12,358,11,20,7,356,359,2,11,3] #these are indexed in roder of patients with none missing
+            #gmi_step_4_results_corrected = [4, 10, 356, 10, 355,15,12,358,12,354,5,359,0,345,353,4,2,0,3,16,12,358,11,20,7,356,359,2,11,3] #these are indexed in roder of patients with none missing
             gmi_step_4_results_raw = [0,356,348,0,348,8,4,356,4,344,4,356,356,336,340,0,0,352,0,8,356,352,4,12,4,352,352,4,4,4]
-
             """for i in range(0,len(gmi_step_4_results_corrected)):
                 patient = patients[i]
                 raw_angle = (gmi_step_4_results_corrected[i] - patient_angles[i]) %360
@@ -849,7 +910,6 @@ def run_multiple_experiments(patient_index, similarity_measure, experiment_type)
                 f.write(str(raw_angle)+",")
                 f.close()
             """
-            
             fine_experiment(patient_index, similarity_measure, gmi_step_4_results_raw)
         
         elif similarity_measure == 'entropy':
@@ -862,8 +922,8 @@ def run_multiple_experiments(patient_index, similarity_measure, experiment_type)
 
             fine_experiment(patient_index, similarity_measure, mi_step_4_results_raw)
         elif similarity_measure == "gmi_e":
-            
             gmie_step_4_results_raw = [0,356,348,0,348,4,4,356,4,344,4,352,356,336,340,0,0,352,0,0,356,352,4,8,4,0,356,4,0,0]
+            gmie_step_2_results_raw = [358,356,348,0,348,6,4,358,4,342,4,352,356,336,342,0,358,354,0,2,356,352,4,8,2,0,354,4,2,2]
             
             fine_experiment(patient_index, similarity_measure, gmie_step_4_results_raw)
         
@@ -902,11 +962,16 @@ mi_step_4_results_raw = [356,356,348,0,348,8,4,356,4,352,4,352, 356,336,340,0,35
 
 #patient_index = [patients.index("9990355")]
 patient_index = range(0, len(patients))
-similarity_measure = "gmi"
-experiment_type = "fine"
+similarity_measure = "gmi_e"
+experiment_type = "coarse"
 
-run_multiple_experiments(patient_index, similarity_measure, experiment_type)
-
+#run_multiple_experiments(patient_index, similarity_measure, experiment_type)
+i = 13
+#21
+#13
+for i in range (1,5):
+    registration_experiment(patients[i], "LEFT", 0, 15, 7, 1, 64, 12, 12, 2, 3, 3, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255, gradient_descent = True)
+    print(patients[i])
 """
 for i in patient_index:
     print(i)
