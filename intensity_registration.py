@@ -6,7 +6,9 @@ import cv2
 from readMLMasks import loadPatientMask
 import random
 import math
-
+import time
+import csv
+import os
 """
 #old version of the function we keep for reference until final software complete
 
@@ -639,7 +641,7 @@ def rot_scale_vert(volume, rot_start, rot_num_images, rot_step, xray, xray_patel
         else:
             
             if images_done<=1:
-                angle = (angle +rot_step)%360
+                angle = (angle -rot_step)%360
             
             else:
 
@@ -667,7 +669,7 @@ def rot_scale_vert(volume, rot_start, rot_num_images, rot_step, xray, xray_patel
                 
 
                 angle = (angle +step)%360
-            decay = decay*0.9
+            decay = decay*0.7
             if images_done >= rot_num_images:
                 done = True
 
@@ -684,6 +686,7 @@ def rot_scale_vert(volume, rot_start, rot_num_images, rot_step, xray, xray_patel
 
 #full experiment to take in patient xray and mri volume and register them given the search parameters
 def registration_experiment(patient, side, rot_start, rot_num_images, rot_step,scalar, num_bins, num_up, num_down, trans_step, num_inflate, num_deflate, xray_patella_centre, tibial_coordinates, kernel_size, angle, resize =0.5, measure = 'entropy', noise_constant =10, gradient_descent = False):
+    start = time.time()
     _, volume = loadPatientMask(patient, side, "1")
     xray_patella_mask = cv2.imread("xrays\\"+patient+"_"+side.lower()+"_xray_contour.png", cv2.IMREAD_GRAYSCALE)
     original_xray = cv2.imread("xrays\\"+patient+"_"+side.lower()+"_xray.jpg", cv2.IMREAD_GRAYSCALE)
@@ -696,12 +699,13 @@ def registration_experiment(patient, side, rot_start, rot_num_images, rot_step,s
     xray_patella_mask =cv2.resize(xray_patella_mask, (0,0), fx=resize, fy =resize)
     np.save("results\\"+patient+"_"+side+"_enhanced_xray.npy", xray)
     entropies, min_entropy, angle_achieved_at, scale_achieved_at, height_achieved_at = rot_scale_vert(volume, rot_start, rot_num_images,rot_step ,xray, xray_patella_mask, scalar, num_bins, num_up, num_down, trans_step, num_inflate, num_deflate, resize, measure=measure, noise_constant=noise_constant, gradient_descent=gradient_descent)
+    end = time.time()
+    time_taken = end-start
+
     print(entropies)
     print("Min entropy was ", min_entropy, " achieved at (angle, scale, height) ", angle_achieved_at, scale_achieved_at, height_achieved_at)
     np.savez_compressed("results\\"+patient+"_"+side+"_angleEntropies.npz", e= entropies, s = [min_entropy, angle_achieved_at, scale_achieved_at, height_achieved_at])
-    f = open("temp_angles.text", "w")
-    f.write(" ")
-    f.close()
+    
     f = open("temp_angles.text", "a")
     f.write(str(angle_achieved_at)+",")
     f.close()
@@ -740,32 +744,58 @@ def registration_experiment(patient, side, rot_start, rot_num_images, rot_step,s
     #plt.imshow(overlay, cmap='gray')
     #plt.show()
     
-    fg, ax = plt.subplots(2,2)
+    
     rotation_relative_to_true_coronal = (angle+angle_achieved_at)%360
     if rotation_relative_to_true_coronal >180:
         rotation_relative_to_true_coronal = -1*(360-rotation_relative_to_true_coronal)
     
-    fg.suptitle("Pure rot " + str(angle_achieved_at) + ", Relative angle " + str(rotation_relative_to_true_coronal) + ", Scale " + str(scale_achieved_at)+ ", Height " + str(height_achieved_at))
+    
+    fg, ax = plt.subplots(2,2)
+    fg.suptitle("Viewing Angle: " + str(int(rotation_relative_to_true_coronal)) +", Minimising Angle: " + str(int(angle_achieved_at)) +  ",\n Scale: " + str(round(scale_achieved_at,2))+ ", Height " + str(round(height_achieved_at,2)))
     ax[0][0].imshow(cropped_xray, cmap= 'gray')
-    ax[0][0].set_title("Enhanced_xray")
+    ax[0][0].set_title("Processed X-ray")
+    ax[0][0].set_axis_off()
     ax[0][1].imshow(pxray, cmap= 'gray')
-    ax[0][1].set_title("Pseudo_xray")
+    ax[0][1].set_title("Pseudo-xray")
+    ax[0][1].set_axis_off()
     ax[1][0].imshow(overlay, cmap = 'gray')
-    ax[1][0].set_title("Overlay")
+    ax[1][0].set_title("Overlayed Images")
+    ax[1][0].set_axis_off()
     ax[1][1].imshow(difference, cmap = 'gray')
-    ax[1][1].set_title("Difference image")
+    ax[1][1].set_title("Difference Image")
+    ax[1][1].set_axis_off()
     #plt.show()
 
-    plt.savefig("results\\"+patient+"_"+side+"_registered_images.png")
+    path = "results\\" + patient + "\\" + measure + "\\"
+    if not os.path.exists(path):
+        os.makedirs(path)
+    
+    plt.savefig(path+"registered_images.png")
+    cv2.imwrite(path + "cropped_xray.png", cropped_xray)
+    cv2.imwrite(path + "pxray.png", pxray)
+    cv2.imwrite(path + "overlay.png", overlay)
+    cv2.imwrite(path + "difference.png", difference)
+
+    
 
     fg2, ax2 = plt.subplots(1,3)
     ax2[0].imshow(resized_first_xray, cmap ='gray', vmin =0, vmax =255)
-    ax2[0].set_title("Original Xray")
+    ax2[0].set_title("Original X-ray")
+    ax2[0].set_axis_off()
     ax2[1].imshow(unrotated_pxray, cmap ='gray', vmin =0, vmax =255)
-    ax2[1].set_title("Unrotated Pseudo-Xray")
+    ax2[1].set_title("Unrotated Pseudo-xray")
+    ax2[1].set_axis_off()
     ax2[2].imshow(true_xray_overlay, cmap ='gray', vmin = 0, vmax = 255)
-    ax2[2].set_title("Registered Pseudo-Xray to Xray")
-    plt.savefig("results\\"+patient+"_"+side+"_unprocessed_images.png")
+    ax2[2].set_title("Registered Pseudo-xray and Xray")
+    ax2[2].set_axis_off()
+    #plt.savefig("results\\"+patient+"_"+side+"_unprocessed_images.png")
+    plt.savefig(path+"unprocessed_images.png")
+    cv2.imwrite(path + "original_xray.png", resized_first_xray)
+    cv2.imwrite(path + "unrotated_pxray.png", unrotated_pxray)
+    cv2.imwrite(path + "overlay.png", overlay)
+    cv2.imwrite(path + "proportional_overlay.png", true_xray_overlay)
+
+    return rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken 
     
 
 #************************************************************DATA FOR USE IN TESTING***********************************
@@ -875,30 +905,63 @@ for i in range (0, len(patients)):
     patient_tib_centres.append(patient_tib_centres_dict[patient])
     patient_pat_centres.append(patient_pat_centres_dict[patient])
 
+xray_manual_angles = {"9002316":0, "9002411":356, "9002817":348, "9964731":333, "9030925":352, "9031141": 5, "9031930": 16, "9031961":3, "9033937":355, "9034451":355,"9034677":2, "9034812":0,"9034963":2}
 
-                            
 
+def write_record_to_csv(experiment_type, similarity_measure,patient,rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken ):
+    thisrecord = {}
+    thisrecord["Patient"] = patient
+    thisrecord["Determined Viewing Angle"] = rotation_relative_to_true_coronal
+    thisrecord["Minimising Angle"] = angle_achieved_at
+    thisrecord["Minimising Scale Factor"] = scale_achieved_at
+    thisrecord["Minimising Translation Factor"] = height_achieved_at
+    thisrecord["Miniminal Entropy"] = min_entropy
+    thisrecord["Time"] = time_taken
+
+    with open("csvs//"+similarity_measure + "_"+ experiment_type+"_results.csv", "a", newline = '') as csvfile:
+        fieldnames = ["Patient","Determined Viewing Angle","Minimising Angle","Minimising Scale Factor","Minimising Translation Factor","Miniminal Entropy","Time"]
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writerow(thisrecord)
+    
 
 #PATIENT 9964731 is a very good example of an xray with a wildly misaligned patella
 
 #we will define two experiment types - one which does coars 4-angle steps and one which refines given a rough registration
 def coarse_experiment(patient_index, similarity_measure):
+    with open("csvs//"+similarity_measure + "_coarse_results.csv", "w", newline = '') as csvfile:
+            fieldnames = ["Patient","Determined Viewing Angle","Minimising Angle","Minimising Scale Factor","Minimising Translation Factor","Miniminal Entropy","Time"]
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+    f = open("temp_angles.text", "w")
+    f.write(" ")
+    f.close()
     for i in patient_index:
         print(i)
-        registration_experiment(patients[i], "LEFT", 336,11, 4,1, 64, 3, 3, 4, 2, 2, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255)
+        patient = patients[i]
+        rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken= registration_experiment(patients[i], "LEFT", 336,11, 4,1, 64, 3, 3, 4, 2, 2, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255)
         #registration_experiment(patients[i], "LEFT", 336,22, 2,1, 64, 3, 3, 4, 2, 2, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255)
+        
+        write_record_to_csv("coarse", similarity_measure,patient, rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken)
 
-def fine_experiment(patient_index, similarity_measure, raw_coarse_angles):
+def fine_experiment(patient_index, similarity_measure, raw_coarse_angles, experiment_type ="fine"):
+    with open("csvs//"+similarity_measure + "_"+experiment_type+"_results.csv", "w", newline = '') as csvfile:
+        fieldnames = ["Patient","Determined Viewing Angle","Minimising Angle","Minimising Scale Factor","Minimising Translation Factor","Miniminal Entropy","Time"]
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+    f = open("temp_angles.text", "w")
+    f.write(" ")
+    f.close()
     for i in patient_index:
         print(i)
-        registration_experiment(patients[i], "LEFT", raw_coarse_angles[i]-3,8, 1,1, 64, 12, 12, 2, 3, 3, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255)
-
+        patient = patients[i]
+        rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken=registration_experiment(patients[i], "LEFT", raw_coarse_angles[i]-3,8, 1,1, 64, 12, 12, 2, 3, 3, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255)
+        write_record_to_csv(experiment_type, similarity_measure, patient, rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken)
 
 def run_multiple_experiments(patient_index, similarity_measure, experiment_type):
 
     if experiment_type == "coarse":
         coarse_experiment(patient_index, similarity_measure)
-    else:
+    elif experiment_type =="fine":
         if similarity_measure == 'gmi':
             #gmi_step_4_results_corrected = [4, 10, 356, 10, 355,15,12,358,12,354,5,359,0,345,353,4,2,0,3,16,12,358,11,20,7,356,359,2,11,3] #these are indexed in roder of patients with none missing
             gmi_step_4_results_raw = [0,356,348,0,348,8,4,356,4,344,4,356,356,336,340,0,0,352,0,8,356,352,4,12,4,352,352,4,4,4]
@@ -917,7 +980,7 @@ def run_multiple_experiments(patient_index, similarity_measure, experiment_type)
 
             fine_experiment(patient_index, similarity_measure, entropy_step_4_results_raw)
 
-        elif similarity_measure =="mi":
+        elif similarity_measure =="mutual_information":
             mi_step_4_results_raw = [356,356,348,0,348,8,4,356,4,352,4,352, 356,336,340,0,356,352,0, 0,356,348,4,8,4,356,356,0,0,0]
 
             fine_experiment(patient_index, similarity_measure, mi_step_4_results_raw)
@@ -931,14 +994,47 @@ def run_multiple_experiments(patient_index, similarity_measure, experiment_type)
             gradientdiff_step_4_results_raw = [352,352,356,12,348,336,4,0,0,348,0,4,4,16,340,352,16,352,8,8,356,0,12,16,4,336,348,0,344,356]
             fine_experiment(patient_index, similarity_measure, gradientdiff_step_4_results_raw)
             #will come back to this but will be great to get gradient difference stats too
-
-
+    
+    elif experiment_type =="from_manual":
+        manual_raw_angles = []
+        j=0
+        for i in patient_index:
+            while j<i:
+                manual_raw_angles.append(None)
+                j+=1
+            
+            patient = patients[i]
+            manual_xray_angle = xray_manual_angles[patient]
+            manual_raw_angles.append(manual_xray_angle)
+            j+=1
+        print(manual_raw_angles)
+        fine_experiment(patient_index, similarity_measure, manual_raw_angles, experiment_type=experiment_type)
         
 
 
+def grad_desc_experiments(patients, patient_angles, patient_pat_centres, patient_tib_centres, similarity_measure, initial_step, max_images, decay_constant):
+    with open("csvs//"+similarity_measure + "_graddesc_results.csv", "w", newline = '') as csvfile:
+            fieldnames = ["Patient","Determined Viewing Angle","Minimising Angle","Minimising Scale Factor","Minimising Translation Factor","Miniminal Entropy","Time"]
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+    f = open("temp_angles.text", "w")
+    f.write(" ")
+    f.close()
+    for i in range (0, len(patients)):
+        print(i)
+        patient = patients[i]
+        #finer search:
+        #rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken = registration_experiment(patient, "LEFT", 0, max_images, initial_step, 1, 64, 12, 12, 2, 3, 3, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255, gradient_descent = True)
+        #coarser search:
+        rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken = registration_experiment(patient, "LEFT", 0, max_images, initial_step, 1, 64, 3, 3, 4, 2, 2, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255, gradient_descent = True)
+        write_record_to_csv("graddesc", similarity_measure,patient, rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken)
+    
+    
 #for the search procedure we first check angles in steps of 4, doing the registration experiment with parameters 336,11,4, 1, 64, 3, 3, 4, 2, 2,
 #then we refine to do 1 degree checks around the best fit
 #the array below gives the angles relative to true coronal of the 4-step registration with gmi
+
+
 
 """
 gmi_step_4_results_corrected = [4, 10, 356, 10, 355,15,12,358,12,354,5,359,0,345,353,4,2,0,3,16,12,358,11,20,7,356,359,2,11,3] #these are indexed in roder of patients with none missing
@@ -960,29 +1056,32 @@ mi_step_4_results_raw = [356,356,348,0,348,8,4,356,4,352,4,352, 356,336,340,0,35
 """
 
 
+
+
+def old_order_to_new(old_order, patients):
+    old_order_dict = {}
+    for i in range(0, len(patients)):
+        patient = patients[i]
+        old_order_dict[patient] = old_order[i]
+    new_order = []
+    for i in range (0, len(patients)):
+        patient = patients_neworder[i]
+        new_order.append(old_order_dict[patient])
+    return new_order
+
+
+
 #patient_index = [patients.index("9990355")]
-patient_index = range(0, len(patients))
-similarity_measure = "gmi_e"
-experiment_type = "coarse"
-
+#patient_index = range(0, len(patients))
+patient_index = range(21, len(patients))
+print(patient_index)
+similarity_measure = "mutual_information"
+experiment_type = "from_manual"
 #run_multiple_experiments(patient_index, similarity_measure, experiment_type)
-i = 13
-#21
-#13
-for i in range (1,5):
-    registration_experiment(patients[i], "LEFT", 0, 15, 7, 1, 64, 12, 12, 2, 3, 3, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255, gradient_descent = True)
-    print(patients[i])
-"""
-for i in patient_index:
-    print(i)
-    registration_experiment(patients[i], "LEFT", gmi_step_4_results_raw[i]-3,8, 1,1, 64, 12, 12, 2, 3, 3, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = 'gmi', noise_constant = 255)
-    #registration_experiment(patients[i], "LEFT", 336,11, 4,1, 64, 3, 3, 4, 2, 2, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = 'entropy', noise_constant = 255)
-    #registration_experiment(patients[i], "LEFT", mi_step_4_results_raw[i]-3,8, 1,1, 64, 12, 12, 2, 3, 3, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = 'mutual_information', noise_constant = 255)
-    #registration_experiment(patients[i], "LEFT", entropy_step_4_results_raw[i]-3,8, 1,1, 64, 12, 12, 2, 3, 3, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = 'entropy', noise_constant = 255)
-#was 336,11,4, 1, 64, 3, 3, 4, 2, 2,
-#_,_, 1,1, 64, 12, 12, 2, 3, 3,  - for refined search
 
-#gradient different isn't good here. Entropy needs some improving. Come back to this.
-"""
+#grad_desc_experiments(patients, patient_angles, patient_pat_centres, patient_tib_centres, "gmi_e",10, 10, 0.7)
 
 
+#manual registrations
+#i=11 just did this, 12 next
+#registration_experiment(patients[i], "LEFT", 352,8, 1,1, 64, 12, 12, 2, 3, 3, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = "mutual_information", noise_constant = 255)
