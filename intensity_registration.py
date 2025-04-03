@@ -455,7 +455,7 @@ def plot_entropies(volume, start, num_images, step, xray, scale, num_bins):
 
 
 #given the original xray, the current position of it, and the pxray, test different vertical translations
-def vertical_translational_freedom(xray, top_bound, left_bound, num_up, num_down, step, pxray, scalar, num_bins,  angle, scale_factor, measure = 'entropy', noise_constant =10,):
+def vertical_translational_freedom(xray, top_bound, left_bound, num_up, num_down, step, pxray, scalar, num_bins,  angle, scale_factor, measure = 'entropy', noise_constant =10, save_time = False):
     entropies = []
 
     
@@ -515,7 +515,9 @@ def vertical_translational_freedom(xray, top_bound, left_bound, num_up, num_down
         ax[1][1].set_title("Difference image")
         plt.show()
         """
-        
+
+
+        start_coefficient = time.time()
 
         if measure == 'entropy':
             entropy = entropy_of_difference(cropped_xray, pxray, scalar, num_bins)
@@ -529,6 +531,20 @@ def vertical_translational_freedom(xray, top_bound, left_bound, num_up, num_down
             entropy = GMI(cropped_xray, pxray, num_bins)
         elif measure == 'gmi_e':
             entropy = GMI_e(cropped_xray, pxray, num_bins)
+
+        end_coefficient =time.time()
+        time_taken  = end_coefficient-start_coefficient
+        
+        if save_time==True:
+            thisrecord = {}
+            thisrecord["Number"] = i
+            thisrecord["Time"] =time_taken
+
+            with open("csvs//time_"+similarity_measure + ".csv", "a", newline = '') as csvfile:
+                fieldnames = ["Number","Time"]
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writerow(thisrecord)
+
         
         
 
@@ -571,6 +587,7 @@ def rot_scale_vert(volume, rot_start, rot_num_images, rot_step, xray, xray_patel
         rotated_volume = rotate_volume(volume, angle, without_cartilidge=True)
         
         pxray = pre_process_pxray(rotated_volume, just_patella, 85, 115, resize)
+        #print(pxray.shape)
         #plt.imshow(pxray, cmap = 'gray', vmin = 0, vmax =255)
         #plt.show()
 
@@ -624,6 +641,10 @@ def rot_scale_vert(volume, rot_start, rot_num_images, rot_step, xray, xray_patel
         
         print("scale entropies are ", scale_entropies)
         print("scales are: ", scales)
+        #f = open("temp_angles.text", "a")
+        #f.write(str(scales)+"\n")
+        #f.write(str(scale_entropies)+"\n")
+        #f.close()
         angle_entropy, height_of_min_entropy = min (scale_entropies)
         scale_of_min_entropy = scales[scale_entropies.index((angle_entropy, height_of_min_entropy))]
         angle_entropies.append((angle_entropy, scale_of_min_entropy, height_of_min_entropy))
@@ -698,14 +719,18 @@ def registration_experiment(patient, side, rot_start, rot_num_images, rot_step,s
     xray = cv2.resize(xray, (0,0), fx=resize, fy =resize)
     xray_patella_mask =cv2.resize(xray_patella_mask, (0,0), fx=resize, fy =resize)
     np.save("results\\"+patient+"_"+side+"_enhanced_xray.npy", xray)
+    
     entropies, min_entropy, angle_achieved_at, scale_achieved_at, height_achieved_at = rot_scale_vert(volume, rot_start, rot_num_images,rot_step ,xray, xray_patella_mask, scalar, num_bins, num_up, num_down, trans_step, num_inflate, num_deflate, resize, measure=measure, noise_constant=noise_constant, gradient_descent=gradient_descent)
+    
     end = time.time()
     time_taken = end-start
 
     print(entropies)
     print("Min entropy was ", min_entropy, " achieved at (angle, scale, height) ", angle_achieved_at, scale_achieved_at, height_achieved_at)
-    np.savez_compressed("results\\"+patient+"_"+side+"_angleEntropies.npz", e= entropies, s = [min_entropy, angle_achieved_at, scale_achieved_at, height_achieved_at])
+    np.savez_compressed("results\\"+patient+"\\"+measure+"\\angleEntropies.npz", e= entropies, s = [min_entropy, angle_achieved_at, scale_achieved_at, height_achieved_at])
     
+
+
     f = open("temp_angles.text", "a")
     f.write(str(angle_achieved_at)+",")
     f.close()
@@ -1071,17 +1096,22 @@ def old_order_to_new(old_order, patients):
 
 
 
-#patient_index = [patients.index("9990355")]
+patient_index = [patients.index("9034677")]
 #patient_index = range(0, len(patients))
-patient_index = range(21, len(patients))
+#patient_index = range(21, len(patients))
 print(patient_index)
-similarity_measure = "mutual_information"
-experiment_type = "from_manual"
-#run_multiple_experiments(patient_index, similarity_measure, experiment_type)
+similarity_measure = "gmi_e"
+experiment_type = "fine"
+
 
 #grad_desc_experiments(patients, patient_angles, patient_pat_centres, patient_tib_centres, "gmi_e",10, 10, 0.7)
 
+def initialise_time_csv(similarity_measure):
+    with open("csvs//time_"+similarity_measure + ".csv", "w", newline = '') as csvfile:
+        fieldnames = ["Number","Time"]
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
 
-#manual registrations
-#i=11 just did this, 12 next
-#registration_experiment(patients[i], "LEFT", 352,8, 1,1, 64, 12, 12, 2, 3, 3, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = "mutual_information", noise_constant = 255)
+
+#initialise_time_csv(similarity_measure)
+#run_multiple_experiments(patient_index, similarity_measure, experiment_type)
