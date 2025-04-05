@@ -9,38 +9,7 @@ import math
 import time
 import csv
 import os
-"""
-#old version of the function we keep for reference until final software complete
 
-def pre_process_xray_tibialvals(xray_image, xray_patella_mask, xray_patella_centre, tibial_coordinates, kernel_size):
-    sample = xray_image[tibial_coordinates[1]-(kernel_size//2): tibial_coordinates[1]+(kernel_size//2), tibial_coordinates[0]-(kernel_size//2):tibial_coordinates[0]+(kernel_size//2)]
-    #xray_image[tibial_coordinates[1]-(kernel_size//2): tibial_coordinates[1]+(kernel_size//2), tibial_coordinates[0]-(kernel_size//2):tibial_coordinates[0]+(kernel_size//2)] = 1000*sampl
-    #xray_image = cv2.rectangle(xray_image, (tibial_coordinates[1]-(kernel_size//2), tibial_coordinates[0]-(kernel_size//2)), ( tibial_coordinates[1]+(kernel_size//2), tibial_coordinates[0]+(kernel_size//2)), 255)
-    #plt.imshow(xray_image, cmap = 'gray')
-    #plt.show()
-    min_val = np.min(sample)
-    xray_image = cv2.threshold(xray_image, min_val, 255, cv2.THRESH_TOZERO)[1]
-    PXRAY_TIBIAL_VAL  = 85 # contant
-    xray_image = (PXRAY_TIBIAL_VAL / min_val) *xray_image
-    #now want to find the average patella brightness so that I can enhance.
-    brightest_mask = np.where(xray_patella_mask >0, 0, 1)
-    #plt.imshow(brightest_mask,cmap = 'gray')
-    #plt.show()
-    patella_sample = xray_image[xray_patella_centre[1]-(kernel_size//2): xray_patella_centre[1]+(kernel_size//2), xray_patella_centre[0]-(kernel_size//2):xray_patella_centre[0]+(kernel_size//2)]
-    avg_patella_val = np.average(patella_sample)
-    #brightest_mask = cv2.threshold(xray_image, avg_patella_val, 255, cv2.THRESH_TOZERO)[1]
-    #brightest_mask = cv2.threshold(brightest_mask,0,1,cv2.THRESH_BINARY )[1]
-
-    PXRAY_PAT_AVG = 115
-    amount_brightness_to_add = PXRAY_PAT_AVG- avg_patella_val
-    xray_image = xray_image + amount_brightness_to_add*brightest_mask
-    #xray_image = xray_image + PXRAY_PAT_AVG*brightest_mask
-    xray_image = cv2.blur(xray_image, (4,4))
-    plt.imshow(xray_image, cmap = 'gray')
-    plt.show()
-    
-    return xray_image
-"""
 
 #**************************************IMAGE PREPARATION FUNCTIONS**********************************************
 
@@ -212,43 +181,7 @@ def crop_scaled_xray(scaled_xray, pxray_centre, xray_centre, pxray):
 #https://kclpure.kcl.ac.uk/ws/portalfiles/portal/12065027/Studentthesis-Graeme_Penney_2000.pdf
 #make sure inputs are numpy arrays and not just lists
 def entropy_of_difference(image1, image2, scale,num_bins):
-    """
-    #old implementation below but good for demonstrating what is actually going on here
-    assert(image1.shape == image2.shape)
-    difference_array = image1 - scale*image2
 
-    (minVal, maxVal) = (np.min(difference_array), np.max(difference_array))
-    #print(minVal, maxVal)
-
-    bin_width = ((maxVal-minVal)//num_bins)+1
-
-    bin_counts = [0 for i in range (0, num_bins)]
-
-    def find_index_of_bin(value):
-        k = 0
-        while( minVal + k*bin_width <= value  and k<num_bins):
-            k+=1
-        
-        k-=1
-        return k
-
-    
-    for i in range (0, difference_array.shape[0]):
-        for j in range (0, difference_array.shape[1]):
-            value = difference_array[i][j]
-            bin = find_index_of_bin(value)
-            bin_counts[bin] +=1
-    
-    total_num_values = difference_array.shape[0]*difference_array.shape[1]
-    entropy = 0
-    for bin in range(0, num_bins):
-        prob = bin_counts[bin]/total_num_values
-        if prob != 0:
-            entropy += prob*np.log(prob)
-    entropy = -1*entropy
-
-    return entropy
-    """
 
     difference_array = image1 - scale*image2
 
@@ -355,6 +288,7 @@ def gxy(image1, image2, num_bins, kernel=3):
 
     return gxy
 
+#this is GMIe
 #pre: image 1 is xray, image2 is pxray
 #this is a more efficient version which only uses gradient information for pixels on the contour of the pxray
 def mygxy(image1, image2, num_bins, kernel = 3):
@@ -393,9 +327,6 @@ def mygxy(image1, image2, num_bins, kernel = 3):
             gxy+= wa*minvals
 
     return gxy
-
-
-
 
 
 def GMI(image1, image2, num_bins, kernel =3):
@@ -823,6 +754,150 @@ def registration_experiment(patient, side, rot_start, rot_num_images, rot_step,s
     return rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken 
     
 
+def write_record_to_csv(experiment_type, similarity_measure,patient,rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken ):
+    thisrecord = {}
+    thisrecord["Patient"] = patient
+    thisrecord["Determined Viewing Angle"] = rotation_relative_to_true_coronal
+    thisrecord["Minimising Angle"] = angle_achieved_at
+    thisrecord["Minimising Scale Factor"] = scale_achieved_at
+    thisrecord["Minimising Translation Factor"] = height_achieved_at
+    thisrecord["Miniminal Entropy"] = min_entropy
+    thisrecord["Time"] = time_taken
+
+    with open("csvs//"+similarity_measure + "_"+ experiment_type+"_results.csv", "a", newline = '') as csvfile:
+        fieldnames = ["Patient","Determined Viewing Angle","Minimising Angle","Minimising Scale Factor","Minimising Translation Factor","Miniminal Entropy","Time"]
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writerow(thisrecord)
+
+
+#for the search procedure we first check angles in steps of 4, doing the registration experiment with parameters 336,11,4, 1, 64, 3, 3, 4, 2, 2,
+#then we refine to do 1 degree checks around the best fit
+
+
+#we will define two experiment types - one which does coars 4-angle steps and one which refines given a rough registration
+def coarse_experiment(patient_index, similarity_measure, patients, patient_pat_centres, patient_tib_centres, patient_angles):
+    with open("csvs//"+similarity_measure + "_coarse_results.csv", "w", newline = '') as csvfile:
+            fieldnames = ["Patient","Determined Viewing Angle","Minimising Angle","Minimising Scale Factor","Minimising Translation Factor","Miniminal Entropy","Time"]
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+    f = open("temp_angles.text", "w")
+    f.write(" ")
+    f.close()
+    for i in patient_index:
+        print(i)
+        patient = patients[i]
+        rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken= registration_experiment(patients[i], "LEFT", 336,11, 4,1, 64, 3, 3, 4, 2, 2, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255)
+        #registration_experiment(patients[i], "LEFT", 336,22, 2,1, 64, 3, 3, 4, 2, 2, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255)
+        
+        write_record_to_csv("coarse", similarity_measure,patient, rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken)
+
+def fine_experiment(patient_index, similarity_measure, raw_coarse_angles, patients, patient_pat_centres, patient_tib_centres, patient_angles, experiment_type ="fine"):
+    with open("csvs//"+similarity_measure + "_"+experiment_type+"_results.csv", "w", newline = '') as csvfile:
+        fieldnames = ["Patient","Determined Viewing Angle","Minimising Angle","Minimising Scale Factor","Minimising Translation Factor","Miniminal Entropy","Time"]
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+    f = open("temp_angles.text", "w")
+    f.write(" ")
+    f.close()
+    for i in patient_index:
+        print(i)
+        patient = patients[i]
+        rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken=registration_experiment(patients[i], "LEFT", raw_coarse_angles[i]-3,8, 1,1, 64, 12, 12, 2, 3, 3, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255)
+        write_record_to_csv(experiment_type, similarity_measure, patient, rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken)
+
+def run_multiple_experiments(patient_index, similarity_measure, experiment_type, patients, patient_pat_centres, patient_tib_centres, patient_angles):
+
+    if experiment_type == "coarse":
+        coarse_experiment(patient_index, similarity_measure, patients, patient_pat_centres, patient_tib_centres, patient_angles)
+    elif experiment_type =="fine":
+        if similarity_measure == 'gmi':
+            #gmi_step_4_results_corrected = [4, 10, 356, 10, 355,15,12,358,12,354,5,359,0,345,353,4,2,0,3,16,12,358,11,20,7,356,359,2,11,3] #these are indexed in roder of patients with none missing
+            gmi_step_4_results_raw = [0,356,348,0,348,8,4,356,4,344,4,356,356,336,340,0,0,352,0,8,356,352,4,12,4,352,352,4,4,4]
+            """for i in range(0,len(gmi_step_4_results_corrected)):
+                patient = patients[i]
+                raw_angle = (gmi_step_4_results_corrected[i] - patient_angles[i]) %360
+                gmi_step_4_results_raw.append(raw_angle)
+                f = open("temp_angles.text", "a")
+                f.write(str(raw_angle)+",")
+                f.close()
+            """
+            fine_experiment(patient_index, similarity_measure, gmi_step_4_results_raw, patients, patient_pat_centres, patient_tib_centres, patient_angles)
+        
+        elif similarity_measure == 'entropy':
+            entropy_step_4_results_raw = [0,356,352,0,344,4,4,356,0,352,0,356,0,340,344,356,356,352,4,8,356,348,8,352,356,344,356,4,4,8]
+
+            fine_experiment(patient_index, similarity_measure, entropy_step_4_results_raw, patients, patient_pat_centres, patient_tib_centres, patient_angles)
+
+        elif similarity_measure =="mutual_information":
+            mi_step_4_results_raw = [356,356,348,0,348,8,4,356,4,352,4,352, 356,336,340,0,356,352,0, 0,356,348,4,8,4,356,356,0,0,0]
+
+            fine_experiment(patient_index, similarity_measure, mi_step_4_results_raw, patients, patient_pat_centres, patient_tib_centres, patient_angles)
+        elif similarity_measure == "gmi_e":
+            gmie_step_4_results_raw = [0,356,348,0,348,4,4,356,4,344,4,352,356,336,340,0,0,352,0,0,356,352,4,8,4,0,356,4,0,0]
+            gmie_step_2_results_raw = [358,356,348,0,348,6,4,358,4,342,4,352,356,336,342,0,358,354,0,2,356,352,4,8,2,0,354,4,2,2]
+            
+            fine_experiment(patient_index, similarity_measure, gmie_step_4_results_raw, patients, patient_pat_centres, patient_tib_centres, patient_angles)
+        
+        elif similarity_measure == "gradient_difference":
+            gradientdiff_step_4_results_raw = [352,352,356,12,348,336,4,0,0,348,0,4,4,16,340,352,16,352,8,8,356,0,12,16,4,336,348,0,344,356]
+            fine_experiment(patient_index, similarity_measure, gradientdiff_step_4_results_raw, patients, patient_pat_centres, patient_tib_centres, patient_angles)
+            #will come back to this but will be great to get gradient difference stats too
+    
+    elif experiment_type =="from_manual":
+        manual_raw_angles = []
+        j=0
+        for i in patient_index:
+            while j<i:
+                manual_raw_angles.append(None)
+                j+=1
+            
+            patient = patients[i]
+            manual_xray_angle = xray_manual_angles[patient]
+            manual_raw_angles.append(manual_xray_angle)
+            j+=1
+        print(manual_raw_angles)
+        fine_experiment(patient_index, similarity_measure, manual_raw_angles, patients, patient_pat_centres, patient_tib_centres, patient_angles, experiment_type=experiment_type)
+        
+
+
+def grad_desc_experiments(patients, patient_angles, patient_pat_centres, patient_tib_centres, similarity_measure, initial_step, max_images, decay_constant):
+    with open("csvs//"+similarity_measure + "_graddesc_results.csv", "w", newline = '') as csvfile:
+            fieldnames = ["Patient","Determined Viewing Angle","Minimising Angle","Minimising Scale Factor","Minimising Translation Factor","Miniminal Entropy","Time"]
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+    f = open("temp_angles.text", "w")
+    f.write(" ")
+    f.close()
+    for i in range (0, len(patients)):
+        print(i)
+        patient = patients[i]
+        #finer search:
+        #rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken = registration_experiment(patient, "LEFT", 0, max_images, initial_step, 1, 64, 12, 12, 2, 3, 3, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255, gradient_descent = True)
+        #coarser search:
+        rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken = registration_experiment(patient, "LEFT", 0, max_images, initial_step, 1, 64, 3, 3, 4, 2, 2, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255, gradient_descent = True)
+        write_record_to_csv("graddesc", similarity_measure,patient, rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken)
+    
+
+
+
+def old_order_to_new(old_order, patients):
+    old_order_dict = {}
+    for i in range(0, len(patients)):
+        patient = patients[i]
+        old_order_dict[patient] = old_order[i]
+    new_order = []
+    for i in range (0, len(patients)):
+        patient = patients_neworder[i]
+        new_order.append(old_order_dict[patient])
+    return new_order  
+
+
+def initialise_time_csv(similarity_measure):
+    with open("csvs//time_"+similarity_measure + ".csv", "w", newline = '') as csvfile:
+        fieldnames = ["Number","Time"]
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+
 #************************************************************DATA FOR USE IN TESTING***********************************
 
 angles = {  "9911221_LEFT_1":10,
@@ -933,135 +1008,13 @@ for i in range (0, len(patients)):
 xray_manual_angles = {"9002316":0, "9002411":356, "9002817":348, "9964731":333, "9030925":352, "9031141": 5, "9031930": 16, "9031961":3, "9033937":355, "9034451":355,"9034677":2, "9034812":0,"9034963":2}
 
 
-def write_record_to_csv(experiment_type, similarity_measure,patient,rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken ):
-    thisrecord = {}
-    thisrecord["Patient"] = patient
-    thisrecord["Determined Viewing Angle"] = rotation_relative_to_true_coronal
-    thisrecord["Minimising Angle"] = angle_achieved_at
-    thisrecord["Minimising Scale Factor"] = scale_achieved_at
-    thisrecord["Minimising Translation Factor"] = height_achieved_at
-    thisrecord["Miniminal Entropy"] = min_entropy
-    thisrecord["Time"] = time_taken
-
-    with open("csvs//"+similarity_measure + "_"+ experiment_type+"_results.csv", "a", newline = '') as csvfile:
-        fieldnames = ["Patient","Determined Viewing Angle","Minimising Angle","Minimising Scale Factor","Minimising Translation Factor","Miniminal Entropy","Time"]
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writerow(thisrecord)
-    
-
 #PATIENT 9964731 is a very good example of an xray with a wildly misaligned patella
 
-#we will define two experiment types - one which does coars 4-angle steps and one which refines given a rough registration
-def coarse_experiment(patient_index, similarity_measure):
-    with open("csvs//"+similarity_measure + "_coarse_results.csv", "w", newline = '') as csvfile:
-            fieldnames = ["Patient","Determined Viewing Angle","Minimising Angle","Minimising Scale Factor","Minimising Translation Factor","Miniminal Entropy","Time"]
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
-    f = open("temp_angles.text", "w")
-    f.write(" ")
-    f.close()
-    for i in patient_index:
-        print(i)
-        patient = patients[i]
-        rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken= registration_experiment(patients[i], "LEFT", 336,11, 4,1, 64, 3, 3, 4, 2, 2, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255)
-        #registration_experiment(patients[i], "LEFT", 336,22, 2,1, 64, 3, 3, 4, 2, 2, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255)
-        
-        write_record_to_csv("coarse", similarity_measure,patient, rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken)
-
-def fine_experiment(patient_index, similarity_measure, raw_coarse_angles, experiment_type ="fine"):
-    with open("csvs//"+similarity_measure + "_"+experiment_type+"_results.csv", "w", newline = '') as csvfile:
-        fieldnames = ["Patient","Determined Viewing Angle","Minimising Angle","Minimising Scale Factor","Minimising Translation Factor","Miniminal Entropy","Time"]
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writeheader()
-    f = open("temp_angles.text", "w")
-    f.write(" ")
-    f.close()
-    for i in patient_index:
-        print(i)
-        patient = patients[i]
-        rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken=registration_experiment(patients[i], "LEFT", raw_coarse_angles[i]-3,8, 1,1, 64, 12, 12, 2, 3, 3, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255)
-        write_record_to_csv(experiment_type, similarity_measure, patient, rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken)
-
-def run_multiple_experiments(patient_index, similarity_measure, experiment_type):
-
-    if experiment_type == "coarse":
-        coarse_experiment(patient_index, similarity_measure)
-    elif experiment_type =="fine":
-        if similarity_measure == 'gmi':
-            #gmi_step_4_results_corrected = [4, 10, 356, 10, 355,15,12,358,12,354,5,359,0,345,353,4,2,0,3,16,12,358,11,20,7,356,359,2,11,3] #these are indexed in roder of patients with none missing
-            gmi_step_4_results_raw = [0,356,348,0,348,8,4,356,4,344,4,356,356,336,340,0,0,352,0,8,356,352,4,12,4,352,352,4,4,4]
-            """for i in range(0,len(gmi_step_4_results_corrected)):
-                patient = patients[i]
-                raw_angle = (gmi_step_4_results_corrected[i] - patient_angles[i]) %360
-                gmi_step_4_results_raw.append(raw_angle)
-                f = open("temp_angles.text", "a")
-                f.write(str(raw_angle)+",")
-                f.close()
-            """
-            fine_experiment(patient_index, similarity_measure, gmi_step_4_results_raw)
-        
-        elif similarity_measure == 'entropy':
-            entropy_step_4_results_raw = [0,356,352,0,344,4,4,356,0,352,0,356,0,340,344,356,356,352,4,8,356,348,8,352,356,344,356,4,4,8]
-
-            fine_experiment(patient_index, similarity_measure, entropy_step_4_results_raw)
-
-        elif similarity_measure =="mutual_information":
-            mi_step_4_results_raw = [356,356,348,0,348,8,4,356,4,352,4,352, 356,336,340,0,356,352,0, 0,356,348,4,8,4,356,356,0,0,0]
-
-            fine_experiment(patient_index, similarity_measure, mi_step_4_results_raw)
-        elif similarity_measure == "gmi_e":
-            gmie_step_4_results_raw = [0,356,348,0,348,4,4,356,4,344,4,352,356,336,340,0,0,352,0,0,356,352,4,8,4,0,356,4,0,0]
-            gmie_step_2_results_raw = [358,356,348,0,348,6,4,358,4,342,4,352,356,336,342,0,358,354,0,2,356,352,4,8,2,0,354,4,2,2]
-            
-            fine_experiment(patient_index, similarity_measure, gmie_step_4_results_raw)
-        
-        elif similarity_measure == "gradient_difference":
-            gradientdiff_step_4_results_raw = [352,352,356,12,348,336,4,0,0,348,0,4,4,16,340,352,16,352,8,8,356,0,12,16,4,336,348,0,344,356]
-            fine_experiment(patient_index, similarity_measure, gradientdiff_step_4_results_raw)
-            #will come back to this but will be great to get gradient difference stats too
-    
-    elif experiment_type =="from_manual":
-        manual_raw_angles = []
-        j=0
-        for i in patient_index:
-            while j<i:
-                manual_raw_angles.append(None)
-                j+=1
-            
-            patient = patients[i]
-            manual_xray_angle = xray_manual_angles[patient]
-            manual_raw_angles.append(manual_xray_angle)
-            j+=1
-        print(manual_raw_angles)
-        fine_experiment(patient_index, similarity_measure, manual_raw_angles, experiment_type=experiment_type)
-        
-
-
-def grad_desc_experiments(patients, patient_angles, patient_pat_centres, patient_tib_centres, similarity_measure, initial_step, max_images, decay_constant):
-    with open("csvs//"+similarity_measure + "_graddesc_results.csv", "w", newline = '') as csvfile:
-            fieldnames = ["Patient","Determined Viewing Angle","Minimising Angle","Minimising Scale Factor","Minimising Translation Factor","Miniminal Entropy","Time"]
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
-    f = open("temp_angles.text", "w")
-    f.write(" ")
-    f.close()
-    for i in range (0, len(patients)):
-        print(i)
-        patient = patients[i]
-        #finer search:
-        #rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken = registration_experiment(patient, "LEFT", 0, max_images, initial_step, 1, 64, 12, 12, 2, 3, 3, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255, gradient_descent = True)
-        #coarser search:
-        rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken = registration_experiment(patient, "LEFT", 0, max_images, initial_step, 1, 64, 3, 3, 4, 2, 2, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255, gradient_descent = True)
-        write_record_to_csv("graddesc", similarity_measure,patient, rotation_relative_to_true_coronal, angle_achieved_at,  scale_achieved_at, height_achieved_at, min_entropy, time_taken)
-    
-    
-#for the search procedure we first check angles in steps of 4, doing the registration experiment with parameters 336,11,4, 1, 64, 3, 3, 4, 2, 2,
-#then we refine to do 1 degree checks around the best fit
-#the array below gives the angles relative to true coronal of the 4-step registration with gmi
 
 
 
 """
+#ARCHIVED TEXT:
 gmi_step_4_results_corrected = [4, 10, 356, 10, 355,15,12,358,12,354,5,359,0,345,353,4,2,0,3,16,12,358,11,20,7,356,359,2,11,3] #these are indexed in roder of patients with none missing
 gmi_step_4_results_raw = []
 
@@ -1083,35 +1036,18 @@ mi_step_4_results_raw = [356,356,348,0,348,8,4,356,4,352,4,352, 356,336,340,0,35
 
 
 
-def old_order_to_new(old_order, patients):
-    old_order_dict = {}
-    for i in range(0, len(patients)):
-        patient = patients[i]
-        old_order_dict[patient] = old_order[i]
-    new_order = []
-    for i in range (0, len(patients)):
-        patient = patients_neworder[i]
-        new_order.append(old_order_dict[patient])
-    return new_order
 
-
-
-patient_index = [patients.index("9034677")]
+patient_index = [patients.index("9031930")]
 #patient_index = range(0, len(patients))
-#patient_index = range(21, len(patients))
 print(patient_index)
-similarity_measure = "gmi_e"
+similarity_measure = "entropy"
 experiment_type = "fine"
 
 
 #grad_desc_experiments(patients, patient_angles, patient_pat_centres, patient_tib_centres, "gmi_e",10, 10, 0.7)
-
-def initialise_time_csv(similarity_measure):
-    with open("csvs//time_"+similarity_measure + ".csv", "w", newline = '') as csvfile:
-        fieldnames = ["Number","Time"]
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writeheader()
+#run_multiple_experiments(patient_index, similarity_measure, experiment_type, patients, patient_pat_centres, patient_tib_centres, patient_angles)
 
 
-#initialise_time_csv(similarity_measure)
-#run_multiple_experiments(patient_index, similarity_measure, experiment_type)
+#Code for fine search of full search space:
+i = patients.index("9002817")
+registration_experiment(patients[i], "LEFT", 336,44, 1,1, 64, 12, 12, 2, 3, 3, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255)

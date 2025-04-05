@@ -181,4 +181,5 @@ cython_debug/
 /results
 /report
 /csvs
+/data_for_report_plots
 s
