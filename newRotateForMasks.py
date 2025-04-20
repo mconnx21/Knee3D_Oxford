@@ -229,8 +229,8 @@ def rotate_volume(mask, angle, alreadyPadded = False, without_cartilidge = False
     return newMask
 
 
-_, mask = loadPatientMask("9911221", "LEFT", "1")
-rotated_volume = rotate_volume(mask, 0, without_cartilidge=True)
+#_, mask = loadPatientMask("9911221", "LEFT", "1")
+#rotated_volume = rotate_volume(mask, 0, without_cartilidge=True)
 
 
 #patientAngles = [350, 353, 349, 353, 352, 358, 352, 350, 359, 357]
