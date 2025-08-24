@@ -1,2 +1,2 @@
 # Knee3D_Oxford
-Newest version of Knee3D - 4th Year Oxford Master's Project.
+Go to branch T18.1.5.2 for the up-to-date code used in the dissertation.
