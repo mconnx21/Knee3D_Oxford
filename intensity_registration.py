@@ -1035,13 +1035,11 @@ mi_step_4_results_raw = [356,356,348,0,348,8,4,356,4,352,4,352, 356,336,340,0,35
 
 
 
+patient_index = range(0, len(patients))
+similarity_measure = "mutual_information" #can be gmi_e, gmi , entropy
+experiment_type = "coarse" #can be fine
+run_multiple_experiments(patient_index, similarity_measure, experiment_type, patients, patient_pat_centres, patient_tib_centres, patient_angles)
 
-
-patient_index = [patients.index("9031930")]
-#patient_index = range(0, len(patients))
-print(patient_index)
-similarity_measure = "entropy"
-experiment_type = "fine"
 
 
 #grad_desc_experiments(patients, patient_angles, patient_pat_centres, patient_tib_centres, "gmi_e",10, 10, 0.7)
@@ -1049,5 +1047,5 @@ experiment_type = "fine"
 
 
 #Code for fine search of full search space:
-i = patients.index("9002817")
-registration_experiment(patients[i], "LEFT", 336,44, 1,1, 64, 12, 12, 2, 3, 3, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255)
+#i = patients.index("9002817")
+#registration_experiment(patients[i], "LEFT", 336,44, 1,1, 64, 12, 12, 2, 3, 3, patient_pat_centres[i], patient_tib_centres[i], 32, patient_angles[i], measure = similarity_measure, noise_constant = 255)

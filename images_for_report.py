@@ -82,7 +82,8 @@ def coronal_axial_correspondance(patient, side, angle, axial_slice_num):
     #pseudo_mri_axial_correspondance
     _, mask = loadPatientMask(patient, side, "1")
 
-    prepped_mask = prepVolumeWithCircumCircleNew(mask)
+    #prepped_mask = prepVolumeWithCircumCircleNew(mask)
+    prepped_mask = rotate_volume(mask, 0, alreadyPadded=False, without_cartilidge=True)
     original_image = prepped_mask[axial_slice_num]
     original_pseudoxray = MRI_to_Xray(prepped_mask)
 
@@ -131,20 +132,23 @@ def coronal_axial_correspondance(patient, side, angle, axial_slice_num):
     fig.set_figheight(10)
     fig.set_figwidth(20)
     ax[0].imshow(borderedImage)
-    ax[0].set_title("10°, Original")
+    #ax[0].set_title("10°, Original")
+    ax[0].set_title("Original")
     ax[0].axis('off')
     ax[1].imshow(oldRotatedImage,)
     ax[1].axis('off')
-    ax[1].set_title("0°, Old Rotation Function")
+    #ax[1].set_title("0°, Old Rotation Function")
+    ax[1].set_title("Careless rotation")
     ax[2].imshow(circledImage)
-    ax[2].set_title("10°, Original")
+    #ax[2].set_title("10°, Original")
+    ax[2].set_title("Original")
     ax[2].axis('off')
     ax[3].imshow(circledRotatedImage)
     ax[3].axis('off')
-    ax[3].set_title("0°, New Rotation Function")
+    ax[3].set_title("Incircle rotation")
     plt.show()
 
-#coronal_axial_correspondance("9911221", "LEFT", 350, 100)
+
 
 
 
@@ -183,10 +187,46 @@ def get_pxray(patient, side, angle):
 
 
 
+
+
+def generate_example_mask_slices(patient, view, slice_number):
+    _, mask = loadPatientMask(patient, "LEFT", "1")
+    print(mask.shape)
+
+    femoralBone = (cv2.threshold(mask, 1, 7, cv2.THRESH_TOZERO_INV))[1]  #1 in the array
+    tibialBone = cv2.threshold((cv2.threshold(mask,1,7,cv2.THRESH_TOZERO))[1], 2,7, cv2.THRESH_TOZERO_INV)[1] #2 in the array
+    patella = cv2.threshold((cv2.threshold(mask,2,7,cv2.THRESH_TOZERO))[1], 3,7, cv2.THRESH_TOZERO_INV)[1] #3 in the array
+    boneOnly = np.add(np.add(femoralBone, tibialBone), patella)
+    mask = boneOnly
+
+
+    mask = prep_volume_efficient(mask)
+    print(mask.shape)
+
+    if view == "axial":
+        slice = mask[slice_number]
+
+    elif view == "coronal":
+        mask = rotate_volume(mask, 0, alreadyPadded = True)
+        
+        slice = []
+        for axial in range (0, mask.shape[0]):
+                thisline = mask[axial][slice_number]
+                slice.append(thisline)
+        slice = np.array(slice)
+
+    cv2.imwrite("report\\example_"+view+"_mask_"+patient+"_"+str(slice_number)+".png", slice*255)
+
+
 patients = ["9002316", "9002411", "9002817", "9911221", "9911721", "9917307", "9918802", "9921811", "9924274", "9947240", "9938236", "9943227", "9958234", "9964731", "9986355", "9986838", "9989352", "9989700", "9990192", "9990355", "9986207","9030925", "9031141", "9031930", "9031961", "9033937", "9034451", "9034677", "9034812", "9034963"]
 patient_tib_centres = [(170,300), (170,300),(170, 270), (170,303),(170,239), (185,325), (121,286), (179,321),(207,312) , (170,339), (181, 317), (203,326), (155,343),(183,269), (200,310), (158,307), (192,298), (170,300), (170,311), (179,338), (212,311),(192,335), (150,266), (180,354), (164,332), (178,350), (145,296), (156,256), (159,317), (209,329)]
 patient_pat_centres = [(170,220), (170,196), (170,186), (155,232),(182,169), (170,200), (103,195), (178,226), (199, 208), (169,238), (174, 236), (206,240), (146,239), (209,172), (211,216), (153,198), (193,208), (178,206), (164,222), (170,201), (197,222), (204,158), (138,160), (215,195), (156,235), (170,197), (148,199), (151,167), (153,232), (209,238)]
 
-i = patients.index("9964731")
-xray_processing_image(patients[i], "LEFT", patient_pat_centres[i], patient_tib_centres[i], 32)
-get_pxray(patients[i], "LEFT", 0)
+#i = patients.index("9964731")
+#xray_processing_image(patients[i], "LEFT", patient_pat_centres[i], patient_tib_centres[i], 32)
+#get_pxray(patients[i], "LEFT", 0)
+
+# generate_example_mask_slices("9911221", "axial", 150)
+
+#coronal_axial_correspondance("9911221", "LEFT", 350, 150)
+
